@@ -1,4 +1,4 @@
-# Ma'had Review
+# مُذاكر (Mudhakir)
 
 A personal study companion for a student of an online ma'had (Sharia institute). It turns each lesson's material into questions and brings them back over time so the student memorizes what was taught.
 
