@@ -4,7 +4,7 @@ import { StyleSheet, View } from 'react-native';
 
 import { signedInEmail, signInWithGoogle } from '@/sync/auth';
 import { supabase } from '@/sync/client';
-import { lastSyncedAt, syncNow } from '@/sync/sync';
+import { lastSyncedAt, syncNow, type SyncResult } from '@/sync/sync';
 
 import { Button, Text } from './components';
 import { t } from './strings';
@@ -39,15 +39,16 @@ export function BackupSection({ onChanged }: Props) {
     );
   }
 
-  async function sync() {
+  async function sync(): Promise<SyncResult> {
     setMessage(t.syncing);
     const result = await syncNow(db);
     setSynced(await lastSyncedAt(db));
     setMessage(result.status === 'synced' ? t.synced : t.syncFailed);
     if (result.status === 'synced' && result.changed) onChanged();
+    return result;
   }
 
-  async function run(task: () => Promise<void>) {
+  async function run(task: () => Promise<unknown>) {
     setBusy(true);
     try {
       await task();
@@ -66,7 +67,11 @@ export function BackupSection({ onChanged }: Props) {
       return;
     }
     setEmail(await signedInEmail());
-    await sync();
+    // The app's own sync on returning from the browser may already have
+    // restored everything, leaving this one nothing new to report, so the
+    // screen reloads after the first sync either way.
+    const result = await sync();
+    if (result.status === 'synced' && !result.changed) onChanged();
   }
 
   return (

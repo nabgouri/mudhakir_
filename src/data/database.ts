@@ -3,7 +3,9 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 export const DATABASE_NAME = 'mudhakir.db';
 
 // Rows are never removed: `deleted_at` marks a deletion so sync can send it
-// to the cloud. `updated_at` lets the last write win on sync.
+// to the cloud. `updated_at` lets the last write win on sync; a change sets
+// it to now, or one past its old value if the phone's clock is behind the
+// version it pulled, so the change still counts as the last write.
 // Times are milliseconds since the epoch.
 const MIGRATIONS: string[] = [
   `

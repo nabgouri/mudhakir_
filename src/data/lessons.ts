@@ -56,13 +56,13 @@ export async function deleteLesson(db: SQLiteDatabase, id: string): Promise<void
   const now = Date.now();
   await writeTransaction(db, async (tx) => {
     await tx.runAsync(
-      'UPDATE questions SET deleted_at = ?, updated_at = ? WHERE lesson_id = ? AND deleted_at IS NULL',
+      'UPDATE questions SET deleted_at = ?, updated_at = MAX(?, updated_at + 1) WHERE lesson_id = ? AND deleted_at IS NULL',
       now,
       now,
       id,
     );
     await tx.runAsync(
-      'UPDATE lessons SET deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL',
+      'UPDATE lessons SET deleted_at = ?, updated_at = MAX(?, updated_at + 1) WHERE id = ? AND deleted_at IS NULL',
       now,
       now,
       id,

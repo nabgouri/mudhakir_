@@ -54,7 +54,7 @@ export async function renameSubject(db: SQLiteDatabase, id: string, name: string
     (tx) => nameTaken(tx, name, id),
     (tx) =>
       tx.runAsync(
-        'UPDATE subjects SET name = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL AND name <> ?',
+        'UPDATE subjects SET name = ?, updated_at = MAX(?, updated_at + 1) WHERE id = ? AND deleted_at IS NULL AND name <> ?',
         name,
         Date.now(),
         id,
@@ -68,20 +68,20 @@ export async function deleteSubject(db: SQLiteDatabase, id: string): Promise<voi
   const now = Date.now();
   await writeTransaction(db, async (tx) => {
     await tx.runAsync(
-      `UPDATE questions SET deleted_at = ?, updated_at = ?
+      `UPDATE questions SET deleted_at = ?, updated_at = MAX(?, updated_at + 1)
        WHERE deleted_at IS NULL AND lesson_id IN (SELECT id FROM lessons WHERE subject_id = ? AND deleted_at IS NULL)`,
       now,
       now,
       id,
     );
     await tx.runAsync(
-      'UPDATE lessons SET deleted_at = ?, updated_at = ? WHERE subject_id = ? AND deleted_at IS NULL',
+      'UPDATE lessons SET deleted_at = ?, updated_at = MAX(?, updated_at + 1) WHERE subject_id = ? AND deleted_at IS NULL',
       now,
       now,
       id,
     );
     await tx.runAsync(
-      'UPDATE subjects SET deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL',
+      'UPDATE subjects SET deleted_at = ?, updated_at = MAX(?, updated_at + 1) WHERE id = ? AND deleted_at IS NULL',
       now,
       now,
       id,

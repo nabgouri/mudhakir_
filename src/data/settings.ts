@@ -56,7 +56,7 @@ export async function getSettings(db: SQLiteDatabase): Promise<Settings> {
 export async function saveSettings(db: SQLiteDatabase, settings: Settings): Promise<void> {
   await db.runAsync(
     `UPDATE settings SET city_id = ?, latitude = ?, longitude = ?, method = ?, delay_minutes = ?, prayers = ?,
-       updated_at = ?
+       updated_at = MAX(?, updated_at + 1)
      WHERE id = 1`,
     settings.place?.cityId ?? null,
     settings.place?.latitude ?? null,

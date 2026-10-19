@@ -4,7 +4,7 @@ import { writeTransaction } from '@/data/database';
 import { replay, type Rating } from '@/engine/study';
 import { rescheduleReminders } from '@/reminders/schedule';
 
-import { supabase } from './client';
+import { client, supabase } from './client';
 
 // Two-way sync between the phone's SQLite database and the student's
 // Supabase tables (supabase/migrations/). Each sync pushes the phone's
@@ -103,11 +103,6 @@ function convert(columns: Record<string, Kind>, row: Row, to: typeof toRemote): 
   return Object.fromEntries(Object.entries(columns).map(([column, kind]) => [column, to(kind, row[column])]));
 }
 
-function client() {
-  if (supabase === null) throw new Error('Supabase is not configured');
-  return supabase;
-}
-
 // --- Pushing ---
 
 async function pushTable(db: SQLiteDatabase, owner: string, table: Table): Promise<void> {
@@ -187,15 +182,20 @@ async function pushSettings(db: SQLiteDatabase, owner: string): Promise<void> {
 type Cursor = { at: string; id: string };
 
 async function readCursor(db: SQLiteDatabase, table: string): Promise<Cursor | null> {
-  const row = await db.getFirstAsync<{ value: string }>('SELECT value FROM sync_state WHERE key = ?', `pulled:${table}`);
-  return row === null ? null : (JSON.parse(row.value) as Cursor);
+  const value = await readState(db, `pulled:${table}`);
+  return value === null ? null : (JSON.parse(value) as Cursor);
 }
 
-async function writeCursor(tx: SQLiteDatabase, table: string, cursor: Cursor): Promise<void> {
-  await tx.runAsync(
+async function readState(db: SQLiteDatabase, key: string): Promise<string | null> {
+  const row = await db.getFirstAsync<{ value: string }>('SELECT value FROM sync_state WHERE key = ?', key);
+  return row?.value ?? null;
+}
+
+async function writeState(db: SQLiteDatabase, key: string, value: string): Promise<void> {
+  await db.runAsync(
     'INSERT INTO sync_state (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value',
-    `pulled:${table}`,
-    JSON.stringify(cursor),
+    key,
+    value,
   );
 }
 
@@ -232,7 +232,7 @@ async function pullPages(
     await writeTransaction(db, async (tx) => {
       taken = await apply(tx, rows);
       const last = rows[taken - 1];
-      if (last) await writeCursor(tx, table, { at: last.server_updated_at as string, id: last.id as string });
+      if (last) await writeState(tx, `pulled:${table}`, JSON.stringify({ at: last.server_updated_at, id: last.id }));
     });
     if (taken < rows.length || rows.length < PAGE) return;
     const last = rows[rows.length - 1];
@@ -337,11 +337,27 @@ export type SyncResult =
   | { status: 'not-configured' | 'signed-out' | 'failed' }
   | { status: 'synced'; changed: boolean };
 
+// What the phone has sent and pulled belongs to one account. Signed in as
+// another (or the same Google account given a new Supabase user), the phone
+// sends everything again and pulls that account's backup from the start.
+async function startAccount(db: SQLiteDatabase, owner: string): Promise<void> {
+  if ((await readState(db, 'owner')) === owner) return;
+  await writeTransaction(db, async (tx) => {
+    for (const table of [...TABLES.map((t) => t.name), 'settings']) {
+      await tx.runAsync(`UPDATE ${table} SET synced_updated_at = NULL`);
+    }
+    await tx.runAsync('UPDATE reviews SET synced = 0');
+    await tx.runAsync('DELETE FROM sync_state');
+    await writeState(tx, 'owner', owner);
+  });
+}
+
 async function sync(db: SQLiteDatabase): Promise<SyncResult> {
   if (supabase === null) return { status: 'not-configured' };
   const { data } = await supabase.auth.getSession();
   const owner = data.session?.user.id;
   if (owner === undefined) return { status: 'signed-out' };
+  await startAccount(db, owner);
 
   // Parents before children, so the cloud's foreign keys always hold.
   for (const table of TABLES) await pushTable(db, owner, table);
@@ -353,11 +369,7 @@ async function sync(db: SQLiteDatabase): Promise<SyncResult> {
   changed = (await pullReviews(db)) || changed;
   changed = (await pullSettings(db)) || changed;
 
-  await db.runAsync(
-    `INSERT INTO sync_state (key, value) VALUES ('last_synced_at', ?)
-     ON CONFLICT (key) DO UPDATE SET value = excluded.value`,
-    String(Date.now()),
-  );
+  await writeState(db, 'last_synced_at', String(Date.now()));
   // New or changed Questions, Reviews or settings change when Reminders fire.
   if (changed) await rescheduleReminders(db);
   return { status: 'synced', changed };
@@ -390,18 +402,17 @@ export function syncNow(db: SQLiteDatabase): Promise<SyncResult> {
 
 // Whether the phone has changes the cloud doesn't have yet.
 export async function hasPendingChanges(db: SQLiteDatabase): Promise<boolean> {
+  const changed = [...TABLES.map((table) => table.name), 'settings'].map(
+    (table) => `EXISTS (SELECT 1 FROM ${table} WHERE synced_updated_at IS NOT updated_at)`,
+  );
   const row = await db.getFirstAsync<{ pending: number }>(
-    `SELECT EXISTS (SELECT 1 FROM subjects WHERE synced_updated_at IS NOT updated_at)
-       OR EXISTS (SELECT 1 FROM lessons WHERE synced_updated_at IS NOT updated_at)
-       OR EXISTS (SELECT 1 FROM questions WHERE synced_updated_at IS NOT updated_at)
-       OR EXISTS (SELECT 1 FROM reviews WHERE synced = 0)
-       OR EXISTS (SELECT 1 FROM settings WHERE synced_updated_at IS NOT updated_at) AS pending`,
+    `SELECT ${[...changed, 'EXISTS (SELECT 1 FROM reviews WHERE synced = 0)'].join(' OR ')} AS pending`,
   );
   return row?.pending === 1;
 }
 
 // When the phone last finished a sync, or null if it never has.
 export async function lastSyncedAt(db: SQLiteDatabase): Promise<Date | null> {
-  const row = await db.getFirstAsync<{ value: string }>("SELECT value FROM sync_state WHERE key = 'last_synced_at'");
-  return row === null ? null : new Date(Number(row.value));
+  const value = await readState(db, 'last_synced_at');
+  return value === null ? null : new Date(Number(value));
 }

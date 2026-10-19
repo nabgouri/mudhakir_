@@ -1,6 +1,6 @@
 import * as WebBrowser from 'expo-web-browser';
 
-import { supabase } from './client';
+import { client, supabase } from './client';
 
 // Where Google sign-in returns to the app. It must be listed under the
 // Supabase project's redirect URLs (docs/setup-supabase.md).
@@ -12,8 +12,7 @@ export type SignInResult = 'signed-in' | 'cancelled';
 // browser comes back with a one-time code, which is exchanged for the
 // session here.
 export async function signInWithGoogle(): Promise<SignInResult> {
-  if (supabase === null) throw new Error('Supabase is not configured');
-  const { data, error } = await supabase.auth.signInWithOAuth({
+  const { data, error } = await client().auth.signInWithOAuth({
     provider: 'google',
     options: { redirectTo: AUTH_REDIRECT, skipBrowserRedirect: true, queryParams: { prompt: 'select_account' } },
   });
@@ -25,7 +24,7 @@ export async function signInWithGoogle(): Promise<SignInResult> {
   const params = new URL(result.url).searchParams;
   const code = params.get('code');
   if (code === null) throw new Error(params.get('error_description') ?? 'Sign-in returned no code');
-  const exchanged = await supabase.auth.exchangeCodeForSession(code);
+  const exchanged = await client().auth.exchangeCodeForSession(code);
   if (exchanged.error) throw exchanged.error;
   return 'signed-in';
 }

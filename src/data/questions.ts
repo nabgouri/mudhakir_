@@ -99,7 +99,7 @@ export async function addQuestion(db: SQLiteDatabase, lessonId: string, content:
 export async function updateQuestion(db: SQLiteDatabase, id: string, content: QuestionContent): Promise<void> {
   const { options, correctOption, answer } = contentColumns(content);
   await db.runAsync(
-    `UPDATE questions SET kind = ?, prompt = ?, options = ?, correct_option = ?, answer = ?, edited = 1, updated_at = ?
+    `UPDATE questions SET kind = ?, prompt = ?, options = ?, correct_option = ?, answer = ?, edited = 1, updated_at = MAX(?, updated_at + 1)
      WHERE id = ? AND deleted_at IS NULL`,
     content.kind,
     content.prompt,
@@ -114,7 +114,7 @@ export async function updateQuestion(db: SQLiteDatabase, id: string, content: Qu
 export async function deleteQuestion(db: SQLiteDatabase, id: string): Promise<void> {
   const now = Date.now();
   await db.runAsync(
-    'UPDATE questions SET deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL',
+    'UPDATE questions SET deleted_at = ?, updated_at = MAX(?, updated_at + 1) WHERE id = ? AND deleted_at IS NULL',
     now,
     now,
     id,

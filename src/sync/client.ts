@@ -1,5 +1,4 @@
 import 'expo-sqlite/localStorage/install';
-import 'react-native-url-polyfill/auto';
 
 import { createClient, processLock, type SupabaseClient } from '@supabase/supabase-js';
 
@@ -25,3 +24,9 @@ export const supabase: SupabaseClient | null =
         },
       })
     : null;
+
+// The client, for code that only runs once Supabase is configured.
+export function client(): SupabaseClient {
+  if (supabase === null) throw new Error('Supabase is not configured');
+  return supabase;
+}

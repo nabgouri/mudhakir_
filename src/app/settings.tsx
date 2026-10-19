@@ -48,7 +48,7 @@ export default function SettingsScreen() {
   // A sync brought changes, perhaps these settings restored from the backup
   // on a new phone: show them, and ask for the notification permission the
   // restored Reminders need.
-  async function synced() {
+  async function reloadAfterSync() {
     const loaded = await getSettings(db);
     setSettings(loaded);
     setDelayText(String(loaded.delayMinutes));
@@ -106,7 +106,7 @@ export default function SettingsScreen() {
   return (
     <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
       <Stack.Screen options={{ title: t.settings }} />
-      <BackupSection onChanged={synced} />
+      <BackupSection onChanged={reloadAfterSync} />
       <Text style={styles.heading}>{t.remindersSection}</Text>
 
       <View style={styles.section}>
