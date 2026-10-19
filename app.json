@@ -24,6 +24,14 @@
       "expo-router",
       "expo-sqlite",
       [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/android-icon-monochrome.png",
+          "color": "#1F5F4A"
+        }
+      ],
+      "expo-background-task",
+      [
         "expo-localization",
         {
           "forcesRTL": true
