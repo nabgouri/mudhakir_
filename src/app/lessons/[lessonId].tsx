@@ -48,12 +48,26 @@ export default function LessonQuestionsScreen() {
         keyExtractor={(question) => question.id}
         contentContainerStyle={styles.list}
         ListHeaderComponent={
-          <View style={styles.header}>
-            <Text style={styles.meta}>{t.questionCount(data?.questions.length ?? 0)}</Text>
-            <Link href={{ pathname: '/questions/new', params: { lessonId } }} asChild>
-              <Button title={t.addQuestion} />
-            </Link>
-          </View>
+          <>
+            {lesson?.generationStatus != null && (
+              <View style={styles.card}>
+                <Text style={lesson.generationStatus === 'failed' ? styles.failed : styles.status}>
+                  {t.generationStatus[lesson.generationStatus]}
+                </Text>
+                {lesson.generationStatus === 'waiting' && <Text style={styles.meta}>{t.waitingHint}</Text>}
+                {lesson.generationStatus === 'generating' && <Text style={styles.meta}>{t.generatingHint}</Text>}
+                {lesson.generationStatus === 'failed' && lesson.generationError !== null && (
+                  <Text style={styles.meta}>{t.generationError(lesson.generationError)}</Text>
+                )}
+              </View>
+            )}
+            <View style={styles.header}>
+              <Text style={styles.meta}>{t.questionCount(data?.questions.length ?? 0)}</Text>
+              <Link href={{ pathname: '/questions/new', params: { lessonId } }} asChild>
+                <Button title={t.addQuestion} />
+              </Link>
+            </View>
+          </>
         }
         ListEmptyComponent={data ? <Text style={styles.empty}>{t.noQuestions}</Text> : undefined}
         renderItem={({ item }) => (
@@ -88,6 +102,7 @@ const styles = StyleSheet.create({
     gap: space.sm,
   },
   header: {
+    marginTop: space.sm,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -122,6 +137,12 @@ const styles = StyleSheet.create({
   meta: {
     fontSize: 15,
     color: colors.textSecondary,
+  },
+  status: {
+    color: colors.primary,
+  },
+  failed: {
+    color: colors.danger,
   },
   actions: {
     flexDirection: 'row',

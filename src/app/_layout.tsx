@@ -10,6 +10,7 @@ import { AppState } from 'react-native';
 import { DATABASE_NAME, migrate } from '@/data/database';
 import { registerBackgroundReschedule } from '@/reminders/background';
 import { REMINDER_URL, rescheduleReminders } from '@/reminders/schedule';
+import { QUESTIONS_READY_KIND } from '@/sync/generation';
 import { Sync } from '@/sync/triggers';
 import { colors, fonts } from '@/ui/theme';
 
@@ -25,14 +26,19 @@ Notifications.setNotificationHandler({
   }),
 });
 
+// A Reminder opens a Review Session; "Questions ready" opens its Lesson.
 function openNotificationLink(response: Notifications.NotificationResponse) {
-  if (response.notification.request.content.data?.url === REMINDER_URL) router.push(REMINDER_URL);
+  const data = response.notification.request.content.data;
+  if (data?.url === REMINDER_URL) router.push(REMINDER_URL);
+  else if (data?.kind === QUESTIONS_READY_KIND && typeof data.lessonId === 'string') {
+    router.push({ pathname: '/lessons/[lessonId]', params: { lessonId: data.lessonId } });
+  }
 }
 
 // Keeps Reminders scheduled: when the app opens, comes back to the
 // foreground, or goes to the background (catching Questions added or
 // deleted meanwhile), and from the periodic background task. Tapping a
-// Reminder opens the screen its link names.
+// notification opens the screen it names.
 function Reminders() {
   const db = useSQLiteContext();
 

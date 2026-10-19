@@ -1,4 +1,4 @@
-import { parseLessonNumber, parseSubjectName } from '../input';
+import { parseInteractiveReviewUrl, parseLessonNumber, parseSubjectName } from '../input';
 
 describe('parseSubjectName', () => {
   test.each([
@@ -38,5 +38,22 @@ describe('parseLessonNumber', () => {
     ['10000', null],
   ])('%j → %j', (raw, expected) => {
     expect(parseLessonNumber(raw)).toBe(expected);
+  });
+});
+
+describe('parseInteractiveReviewUrl', () => {
+  test.each([
+    ['https://review.example.org/fiqh/3', 'https://review.example.org/fiqh/3'],
+    ['  https://review.example.org/fiqh/3\n', 'https://review.example.org/fiqh/3'],
+    ['\u200Fhttps://review.example.org/?lesson=3', 'https://review.example.org/?lesson=3'],
+    ['review.example.org/fiqh/3', 'https://review.example.org/fiqh/3'],
+    ['http://review.example.org', 'http://review.example.org'],
+    ['', undefined],
+    ['   ', undefined],
+    ['المذاكرة', null],
+    ['ftp://review.example.org/3', null],
+    ['https://review example.org', null],
+  ])('%j → %j', (raw, expected) => {
+    expect(parseInteractiveReviewUrl(raw)).toBe(expected);
   });
 });

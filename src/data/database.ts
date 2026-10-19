@@ -121,6 +121,21 @@ const MIGRATIONS: string[] = [
     value TEXT NOT NULL
   );
   `,
+  // Question generation, as in the cloud's `lessons` and `questions`
+  // (supabase/migrations/). `generation_status` is null for a Lesson with
+  // nothing to generate from, and `waiting` until the phone has sent it.
+  // `parts_done` and `failed_parts` are JSON arrays of part indexes. A
+  // generated Question's `part_index` is the routine run that wrote it.
+  `
+  ALTER TABLE lessons ADD COLUMN interactive_review_url TEXT;
+  ALTER TABLE lessons ADD COLUMN generation_status TEXT
+    CHECK (generation_status IN ('waiting', 'generating', 'ready', 'failed'));
+  ALTER TABLE lessons ADD COLUMN part_count INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE lessons ADD COLUMN parts_done TEXT NOT NULL DEFAULT '[]';
+  ALTER TABLE lessons ADD COLUMN failed_parts TEXT NOT NULL DEFAULT '[]';
+  ALTER TABLE lessons ADD COLUMN error TEXT;
+  ALTER TABLE questions ADD COLUMN part_index INTEGER;
+  `,
 ];
 
 export async function migrate(db: SQLiteDatabase): Promise<void> {

@@ -5,6 +5,7 @@ import { replay, type Rating } from '@/engine/study';
 import { rescheduleReminders } from '@/reminders/schedule';
 
 import { client, supabase } from './client';
+import { lessonsAwaitingQuestions, notifyQuestionsReady, sendWaitingLessons } from './generation';
 
 // Two-way sync between the phone's SQLite database and the student's
 // Supabase tables (supabase/migrations/). Each sync pushes the phone's
@@ -15,6 +16,9 @@ import { client, supabase } from './client';
 //   `deleted_at`, so it syncs like any other.
 // - Reviews are append-only, so they never conflict. A Question's schedule
 //   is not synced: the phone rebuilds it from the Question's Reviews.
+// - Between pushing and pulling, Lessons waiting for Questions are sent for
+//   generation (./generation.ts); the pull then brings their new status,
+//   and later their Questions.
 
 const PAGE = 500;
 
@@ -46,6 +50,12 @@ const TABLES: Table[] = [
       id: 'value',
       subject_id: 'value',
       number: 'value',
+      interactive_review_url: 'value',
+      generation_status: 'value',
+      part_count: 'value',
+      parts_done: 'json',
+      failed_parts: 'json',
+      error: 'value',
       created_at: 'time',
       updated_at: 'time',
       deleted_at: 'time',
@@ -57,6 +67,7 @@ const TABLES: Table[] = [
     columns: {
       id: 'value',
       lesson_id: 'value',
+      part_index: 'value',
       kind: 'value',
       origin: 'value',
       prompt: 'value',
@@ -363,12 +374,15 @@ async function sync(db: SQLiteDatabase): Promise<SyncResult> {
   for (const table of TABLES) await pushTable(db, owner, table);
   await pushReviews(db, owner);
   await pushSettings(db, owner);
+  await sendWaitingLessons(db);
 
+  const awaiting = await lessonsAwaitingQuestions(db);
   let changed = false;
   for (const table of TABLES) changed = (await pullTable(db, table)) || changed;
   changed = (await pullReviews(db)) || changed;
   changed = (await pullSettings(db)) || changed;
 
+  await notifyQuestionsReady(db, awaiting);
   await writeState(db, 'last_synced_at', String(Date.now()));
   // New or changed Questions, Reviews or settings change when Reminders fire.
   if (changed) await rescheduleReminders(db);

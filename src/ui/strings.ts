@@ -1,4 +1,5 @@
 import { MAX_DELAY_MINUTES, MAX_LESSON_NUMBER } from '@/data/input';
+import type { GenerationStatus } from '@/data/lessons';
 import type { CalculationMethodName, Prayer } from '@/engine/reminders';
 
 // Arabic counted nouns: the form depends on the number (1, 2, 3–10, 11–99,
@@ -15,7 +16,8 @@ function counted(n: number, forms: { zero: string; one: string; two: string; few
 
 // Every piece of interface text, in Arabic. Terms follow GLOSSARY.md:
 // Subject = مادة, Lesson = درس, Question = سؤال, Review Session = جلسة مراجعة,
-// Source Passage = النص المصدر, Reminder = تذكير.
+// Source Passage = النص المصدر, Reminder = تذكير,
+// Interactive Review = المذاكرة التفاعلية.
 export const t = {
   subjects: 'المواد',
   noSubjects: 'لا توجد مواد بعد. أضف أول مادة لتبدأ.',
@@ -58,6 +60,17 @@ export const t = {
   subjectNotFound: 'لم يتم العثور على هذه المادة.',
   lessonNotFound: 'لم يتم العثور على هذا الدرس.',
   lessonTitle: (subjectName: string, n: number) => `${subjectName}: الدرس ${n}`,
+  interactiveReviewUrlPlaceholder: 'عنوان المذاكرة التفاعلية (اختياري)',
+  interactiveReviewUrlInvalid: 'الصق عنوان صفحة المذاكرة التفاعلية كما هو، ويبدأ بـ https://',
+  generationStatus: {
+    waiting: 'بانتظار الإرسال لتوليد الأسئلة',
+    generating: 'جارٍ توليد الأسئلة',
+    ready: 'الأسئلة جاهزة',
+    failed: 'تعذّر توليد الأسئلة',
+  } satisfies Record<GenerationStatus, string>,
+  waitingHint: 'يُرسَل الدرس عند اتصال الهاتف بالإنترنت، بعد تسجيل الدخول في الإعدادات.',
+  generatingHint: 'تصل الأسئلة بعد بضع دقائق، ويصلك إشعار حين تجهز.',
+  generationError: (error: string) => `السبب: ${error}`,
 
   noQuestions: 'لا توجد أسئلة في هذا الدرس بعد.',
   addQuestion: 'أضف سؤالًا',
@@ -152,4 +165,8 @@ export const t = {
   remindersChannel: 'التذكير بالمراجعة',
   reminderTitle: 'حان وقت المراجعة',
   reminderBody: (prayer: Prayer) => `بعد صلاة ${t.prayers[prayer]}: راجع أسئلتك المستحقة.`,
+  questionsReadyChannel: 'جاهزية الأسئلة',
+  questionsReadyTitle: 'الأسئلة جاهزة',
+  questionsReadyBody: (subjectName: string, n: number, count: number) =>
+    `${subjectName}: الدرس ${n}، ${t.questionCount(count)}.`,
 } as const;

@@ -1,13 +1,14 @@
 import { Link, Stack, useLocalSearchParams } from 'expo-router';
-import { useCallback, useState } from 'react';
-import { Alert, FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { useCallback, useRef, useState } from 'react';
+import { Alert, FlatList, Pressable, StyleSheet, View, type TextInputInstance } from 'react-native';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import { parseLessonNumber } from '@/data/input';
+import { parseInteractiveReviewUrl, parseLessonNumber } from '@/data/input';
 import { addLesson, deleteLesson, listLessons, type Lesson } from '@/data/lessons';
 import { listStudyQuestions } from '@/data/questions';
 import { getSubject } from '@/data/subjects';
 import { due } from '@/engine/study';
+import { requestQuestionsReadyPermission } from '@/sync/generation';
 import { Button, Text, TextInput } from '@/ui/components';
 import { t } from '@/ui/strings';
 import { colors, space } from '@/ui/theme';
@@ -26,16 +27,23 @@ export default function SubjectLessonsScreen() {
   );
   const { db, data, reload } = useDbQuery(load);
   const [numberText, setNumberText] = useState('');
+  const [reviewUrlText, setReviewUrlText] = useState('');
+  const reviewUrlInput = useRef<TextInputInstance>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function add() {
     const number = parseLessonNumber(numberText);
     if (number === null) return setError(t.lessonNumberInvalid);
-    const result = await addLesson(db, subjectId, number);
+    const reviewUrl = parseInteractiveReviewUrl(reviewUrlText);
+    if (reviewUrl === null) return setError(t.interactiveReviewUrlInvalid);
+    const result = await addLesson(db, subjectId, number, reviewUrl);
     if (!result.ok) return setError(t.lessonNumberTaken);
     setNumberText('');
+    setReviewUrlText('');
     setError(null);
     await reload();
+    // So the "Questions ready" notification can show.
+    if (reviewUrl !== undefined) requestQuestionsReadyPermission().catch(() => {});
   }
 
   function confirmDelete(lesson: Lesson) {
@@ -84,11 +92,23 @@ export default function SubjectLessonsScreen() {
                 onChangeText={setNumberText}
                 placeholder={t.lessonNumberPlaceholder}
                 keyboardType="number-pad"
-                returnKeyType="done"
-                onSubmitEditing={add}
+                returnKeyType="next"
+                onSubmitEditing={() => reviewUrlInput.current?.focus()}
               />
               <Button title={t.addLesson} onPress={add} />
             </View>
+            <TextInput
+              ref={reviewUrlInput}
+              value={reviewUrlText}
+              onChangeText={setReviewUrlText}
+              placeholder={t.interactiveReviewUrlPlaceholder}
+              keyboardType="url"
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="done"
+              onSubmitEditing={add}
+              style={styles.urlInput}
+            />
             {error !== null && <Text style={styles.error}>{error}</Text>}
           </View>
         }
@@ -98,6 +118,11 @@ export default function SubjectLessonsScreen() {
             <Link href={{ pathname: '/lessons/[lessonId]', params: { lessonId: item.id } }} asChild>
               <Pressable style={styles.spacer}>
                 <Text style={styles.name}>{t.lesson(item.number)}</Text>
+                {item.generationStatus !== null && (
+                  <Text style={item.generationStatus === 'failed' ? styles.failed : styles.meta}>
+                    {t.generationStatus[item.generationStatus]}
+                  </Text>
+                )}
               </Pressable>
             </Link>
             <Button title={t.delete} variant="danger" onPress={() => confirmDelete(item)} />
@@ -141,9 +166,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.textSecondary,
   },
+  urlInput: {
+    flex: 0,
+  },
   error: {
     color: colors.danger,
     fontSize: 15,
+  },
+  failed: {
+    fontSize: 16,
+    color: colors.danger,
   },
   empty: {
     color: colors.textSecondary,

@@ -1,3 +1,5 @@
+import { InteractiveReviewUrl } from '../../shared/generation';
+
 // What the student types, turned into values the database accepts.
 // Each parser returns null when the input can't be saved.
 
@@ -81,4 +83,14 @@ export function parseCoordinate(raw: string, limit: 90 | 180): number | null {
   if (!/^[-+]?\d+(\.\d+)?$/.test(text)) return null;
   const value = Number(text);
   return Math.abs(value) <= limit ? value : null;
+}
+
+// The address of a Lesson's Interactive Review, as pasted from the browser.
+// An address with no scheme gets https. Empty input means the Lesson has
+// none, which is `undefined`; null means it can't be used.
+export function parseInteractiveReviewUrl(raw: string): string | undefined | null {
+  const text = raw.replace(INVISIBLE_MARKS, '').trim();
+  if (text === '') return undefined;
+  const url = /^[a-z][a-z0-9+.-]*:/i.test(text) ? text : `https://${text}`;
+  return InteractiveReviewUrl.safeParse(url).success ? url : null;
 }

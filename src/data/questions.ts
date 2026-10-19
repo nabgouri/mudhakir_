@@ -5,27 +5,9 @@ import { rate, type QuestionState, type Rating, type StudyQuestion } from '@/eng
 
 import { writeTransaction } from './database';
 import type { QuestionContent } from './input';
+import { questionFromRow, type Question, type QuestionRow } from './question-row';
 
-export type Question = QuestionContent & {
-  id: string;
-  lessonId: string;
-  subjectId: string;
-  lessonNumber: number;
-  sourcePassage: string | null;
-};
-
-type QuestionRow = {
-  id: string;
-  lessonId: string;
-  subjectId: string;
-  lessonNumber: number;
-  kind: 'multiple-choice' | 'open';
-  prompt: string;
-  options: string | null;
-  correctOption: number | null;
-  answer: string | null;
-  sourcePassage: string | null;
-};
+export type { Question } from './question-row';
 
 // A Question is live while it, its Lesson and its Subject are not deleted.
 // Deleting a Lesson or Subject also marks its Questions, but the joins keep
@@ -46,20 +28,6 @@ function parseSchedule(schedule: string | null): QuestionState | null {
   return schedule === null ? null : (JSON.parse(schedule) as QuestionState);
 }
 
-function fromRow(row: QuestionRow): Question {
-  const base = {
-    id: row.id,
-    lessonId: row.lessonId,
-    subjectId: row.subjectId,
-    lessonNumber: row.lessonNumber,
-    prompt: row.prompt,
-    sourcePassage: row.sourcePassage,
-  };
-  return row.kind === 'multiple-choice'
-    ? { ...base, kind: 'multiple-choice', options: JSON.parse(row.options ?? '[]'), correctOption: row.correctOption ?? 0 }
-    : { ...base, kind: 'open', answer: row.answer ?? '' };
-}
-
 function contentColumns(content: QuestionContent) {
   return content.kind === 'multiple-choice'
     ? { options: JSON.stringify(content.options), correctOption: content.correctOption, answer: null }
@@ -68,12 +36,12 @@ function contentColumns(content: QuestionContent) {
 
 export async function listLessonQuestions(db: SQLiteDatabase, lessonId: string): Promise<Question[]> {
   const rows = await db.getAllAsync<QuestionRow>(`${SELECT_QUESTION} AND q.lesson_id = ? ORDER BY q.created_at`, lessonId);
-  return rows.map(fromRow);
+  return rows.map(questionFromRow);
 }
 
 export async function getQuestion(db: SQLiteDatabase, id: string): Promise<Question | null> {
   const row = await db.getFirstAsync<QuestionRow>(`${SELECT_QUESTION} AND q.id = ?`, id);
-  return row ? fromRow(row) : null;
+  return row ? questionFromRow(row) : null;
 }
 
 export async function addQuestion(db: SQLiteDatabase, lessonId: string, content: QuestionContent): Promise<void> {
