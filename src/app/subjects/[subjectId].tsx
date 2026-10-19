@@ -1,11 +1,15 @@
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { useCallback, useState } from 'react';
-import { Alert, FlatList, StyleSheet, View } from 'react-native';
+import { Link, Stack, useLocalSearchParams } from 'expo-router';
+import { useCallback, useRef, useState } from 'react';
+import { Alert, FlatList, Pressable, StyleSheet, View, type TextInputInstance } from 'react-native';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import { parseLessonNumber } from '@/data/input';
+import { parseInteractiveReviewUrl, parseLessonNumber } from '@/data/input';
 import { addLesson, deleteLesson, listLessons, type Lesson } from '@/data/lessons';
+import { listStudyQuestions } from '@/data/questions';
 import { getSubject } from '@/data/subjects';
+import { due } from '@/engine/study';
+import { requestReminderPermission } from '@/reminders/schedule';
+import { pickProblem, useTranscriptPicker } from '@/transcript/extract';
 import { Button, Text, TextInput } from '@/ui/components';
 import { t } from '@/ui/strings';
 import { colors, space } from '@/ui/theme';
@@ -17,22 +21,47 @@ export default function SubjectLessonsScreen() {
     async (db: SQLiteDatabase) => {
       const subject = await getSubject(db, subjectId);
       const lessons = subject ? await listLessons(db, subjectId) : [];
-      return { subject, lessons };
+      const dueCount = subject ? due(await listStudyQuestions(db), new Date(), { subjectId }).length : 0;
+      return { subject, lessons, dueCount };
     },
     [subjectId],
   );
   const { db, data, reload } = useDbQuery(load);
   const [numberText, setNumberText] = useState('');
+  const [reviewUrlText, setReviewUrlText] = useState('');
+  const reviewUrlInput = useRef<TextInputInstance>(null);
   const [error, setError] = useState<string | null>(null);
+  // The attached Transcript's text, held only until the Lesson is added.
+  const [transcript, setTranscript] = useState<{ name: string; text: string } | null>(null);
+  const { pickTranscript, extractor, reading } = useTranscriptPicker();
+
+  async function attachTranscript() {
+    const picked = await pickTranscript();
+    if (picked.status === 'picked') {
+      setTranscript({ name: picked.name, text: picked.text });
+      setError(null);
+    } else if (picked.status !== 'canceled') {
+      setError(pickProblem(picked));
+    }
+  }
 
   async function add() {
     const number = parseLessonNumber(numberText);
     if (number === null) return setError(t.lessonNumberInvalid);
-    const result = await addLesson(db, subjectId, number);
+    const reviewUrl = parseInteractiveReviewUrl(reviewUrlText);
+    if (reviewUrl === null) return setError(t.interactiveReviewUrlInvalid);
+    const result = await addLesson(db, subjectId, number, {
+      interactiveReviewUrl: reviewUrl,
+      transcriptText: transcript?.text,
+    });
     if (!result.ok) return setError(t.lessonNumberTaken);
     setNumberText('');
+    setReviewUrlText('');
+    setTranscript(null);
     setError(null);
     await reload();
+    // So the "Questions ready" notification can show.
+    if (reviewUrl !== undefined || transcript !== null) requestReminderPermission().catch(() => {});
   }
 
   function confirmDelete(lesson: Lesson) {
@@ -68,29 +97,78 @@ export default function SubjectLessonsScreen() {
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
           <View style={styles.form}>
+            <View style={[styles.card, styles.row]}>
+              <Text style={styles.meta}>{t.dueCount(data?.dueCount ?? 0)}</Text>
+              <View style={styles.spacer} />
+              <Link href={{ pathname: '/review', params: { subjectId } }} asChild>
+                <Button title={t.reviewSubject} />
+              </Link>
+            </View>
             <View style={styles.row}>
               <TextInput
                 value={numberText}
                 onChangeText={setNumberText}
                 placeholder={t.lessonNumberPlaceholder}
                 keyboardType="number-pad"
-                returnKeyType="done"
-                onSubmitEditing={add}
+                returnKeyType="next"
+                onSubmitEditing={() => reviewUrlInput.current?.focus()}
               />
-              <Button title={t.addLesson} onPress={add} />
+              <Button title={t.addLesson} onPress={add} disabled={reading} />
             </View>
+            <TextInput
+              ref={reviewUrlInput}
+              value={reviewUrlText}
+              onChangeText={setReviewUrlText}
+              placeholder={t.interactiveReviewUrlPlaceholder}
+              keyboardType="url"
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="done"
+              onSubmitEditing={add}
+              style={styles.urlInput}
+            />
+            {transcript === null ? (
+              <Button
+                title={reading ? t.readingTranscript : t.attachTranscript}
+                variant="plain"
+                onPress={attachTranscript}
+                disabled={reading}
+              />
+            ) : (
+              <View style={styles.card}>
+                <View style={styles.row}>
+                  <Text style={[styles.meta, styles.spacer]}>
+                    {t.transcriptAttached(transcript.name, transcript.text.length)}
+                  </Text>
+                  <Button title={t.removeTranscript} variant="plain" onPress={() => setTranscript(null)} />
+                </View>
+                {/* The opening lines, so a PDF whose text comes out garbled is noticed before it is sent. */}
+                <Text style={styles.preview} numberOfLines={3}>
+                  {transcript.text.slice(0, 300)}
+                </Text>
+              </View>
+            )}
             {error !== null && <Text style={styles.error}>{error}</Text>}
           </View>
         }
         ListEmptyComponent={data ? <Text style={styles.empty}>{t.noLessons}</Text> : undefined}
         renderItem={({ item }) => (
           <View style={[styles.card, styles.row]}>
-            <Text style={styles.name}>{t.lesson(item.number)}</Text>
-            <View style={styles.spacer} />
+            <Link href={{ pathname: '/lessons/[lessonId]', params: { lessonId: item.id } }} asChild>
+              <Pressable style={styles.spacer}>
+                <Text style={styles.name}>{t.lesson(item.number)}</Text>
+                {item.generationStatus !== null && (
+                  <Text style={item.generationStatus === 'failed' ? styles.failed : styles.meta}>
+                    {t.generationStatus[item.generationStatus]}
+                  </Text>
+                )}
+              </Pressable>
+            </Link>
             <Button title={t.delete} variant="danger" onPress={() => confirmDelete(item)} />
           </View>
         )}
       />
+      {extractor}
     </>
   );
 }
@@ -124,9 +202,25 @@ const styles = StyleSheet.create({
   spacer: {
     flex: 1,
   },
+  meta: {
+    fontSize: 16,
+    color: colors.textSecondary,
+  },
+  urlInput: {
+    flex: 0,
+  },
+  preview: {
+    fontSize: 15,
+    lineHeight: 26,
+    color: colors.textSecondary,
+  },
   error: {
     color: colors.danger,
     fontSize: 15,
+  },
+  failed: {
+    fontSize: 16,
+    color: colors.danger,
   },
   empty: {
     color: colors.textSecondary,

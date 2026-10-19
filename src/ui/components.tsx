@@ -4,9 +4,11 @@ import {
   TextInput as RNTextInput,
   StyleSheet,
   type PressableProps,
+  type TextInputInstance,
   type TextInputProps,
   type TextProps,
 } from 'react-native';
+import type { Ref } from 'react';
 
 import { colors, fonts, space } from './theme';
 
@@ -16,7 +18,7 @@ export function Text({ style, ...props }: TextProps) {
   return <RNText style={[styles.text, style]} {...props} />;
 }
 
-export function TextInput({ style, ...props }: TextInputProps) {
+export function TextInput({ style, ...props }: TextInputProps & { ref?: Ref<TextInputInstance> }) {
   return (
     <RNTextInput
       placeholderTextColor={colors.textSecondary}

@@ -1,17 +1,26 @@
 import { Link, Stack } from 'expo-router';
-import { useSQLiteContext } from 'expo-sqlite';
+import { useSQLiteContext, type SQLiteDatabase } from 'expo-sqlite';
 import { useState } from 'react';
 import { Alert, FlatList, Pressable, StyleSheet, View } from 'react-native';
 
 import { parseSubjectName } from '@/data/input';
+import { listStudyQuestions } from '@/data/questions';
+import { getSettings } from '@/data/settings';
 import { createSubject, deleteSubject, listSubjects, renameSubject, type Subject } from '@/data/subjects';
+import { dueCountsBySubject } from '@/engine/study';
 import { Button, Text, TextInput } from '@/ui/components';
 import { t } from '@/ui/strings';
 import { colors, space } from '@/ui/theme';
 import { useDbQuery } from '@/ui/use-db-query';
 
+async function loadSubjects(db: SQLiteDatabase) {
+  const [subjects, questions, settings] = await Promise.all([listSubjects(db), listStudyQuestions(db), getSettings(db)]);
+  return { subjects, dueCounts: dueCountsBySubject(questions, new Date()), hasPlace: settings.place !== null };
+}
+
 export default function SubjectsScreen() {
-  const { db, data: subjects, reload } = useDbQuery(listSubjects);
+  const { db, data, reload } = useDbQuery(loadSubjects);
+  const subjects = data?.subjects;
   const [newName, setNewName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -42,7 +51,18 @@ export default function SubjectsScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: t.subjects }} />
+      <Stack.Screen
+        options={{
+          title: t.subjects,
+          headerRight: () => (
+            <Link href="/settings" asChild>
+              <Pressable accessibilityRole="button" hitSlop={8}>
+                <Text style={styles.headerLink}>{t.settings}</Text>
+              </Pressable>
+            </Link>
+          ),
+        }}
+      />
       <FlatList
         data={subjects ?? []}
         keyExtractor={(subject) => subject.id}
@@ -50,6 +70,16 @@ export default function SubjectsScreen() {
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
           <View style={styles.form}>
+            {data?.hasPlace === false && (
+              <Link href="/settings" asChild>
+                <Pressable style={styles.hint}>
+                  <Text style={styles.hintText}>{t.noPlaceHint}</Text>
+                </Pressable>
+              </Link>
+            )}
+            <Link href="/review" asChild>
+              <Button title={t.reviewAll} />
+            </Link>
             <View style={styles.row}>
               <TextInput
                 value={newName}
@@ -78,7 +108,9 @@ export default function SubjectsScreen() {
               <Link href={{ pathname: '/subjects/[subjectId]', params: { subjectId: item.id } }} asChild>
                 <Pressable style={styles.cardBody}>
                   <Text style={styles.name}>{item.name}</Text>
-                  <Text style={styles.meta}>{t.lessonCount(item.lessonCount)}</Text>
+                  <Text style={styles.meta}>
+                    {t.lessonCount(item.lessonCount)}، {t.dueCount(data?.dueCounts.get(item.id) ?? 0)}
+                  </Text>
                 </Pressable>
               </Link>
               <View style={styles.actions}>
@@ -127,7 +159,7 @@ const styles = StyleSheet.create({
   },
   form: {
     marginBottom: space.sm,
-    gap: space.xs,
+    gap: space.sm,
   },
   row: {
     flexDirection: 'row',
@@ -161,6 +193,19 @@ const styles = StyleSheet.create({
   error: {
     color: colors.danger,
     fontSize: 15,
+  },
+  headerLink: {
+    color: colors.onPrimary,
+    fontSize: 16,
+  },
+  hint: {
+    backgroundColor: colors.rightSurface,
+    borderRadius: 12,
+    padding: space.md,
+  },
+  hintText: {
+    fontSize: 16,
+    lineHeight: 28,
   },
   empty: {
     color: colors.textSecondary,

@@ -1,7 +1,7 @@
 import { randomUUID } from 'expo-crypto';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import { saveUnique, type SaveResult } from './database';
+import { saveIfUnique, writeTransaction, type SaveResult } from './database';
 
 export type Subject = {
   id: string;
@@ -23,43 +23,66 @@ export async function getSubject(db: SQLiteDatabase, id: string): Promise<Subjec
   return db.getFirstAsync<Subject>(`${SELECT_SUBJECT} AND s.id = ?`, id);
 }
 
+async function nameTaken(db: SQLiteDatabase, name: string, exceptId: string | null): Promise<boolean> {
+  const row = await db.getFirstAsync(
+    'SELECT 1 FROM subjects WHERE name = ? AND id IS NOT ? AND deleted_at IS NULL',
+    name,
+    exceptId,
+  );
+  return row !== null;
+}
+
 export async function createSubject(db: SQLiteDatabase, name: string): Promise<SaveResult> {
   const now = Date.now();
-  return saveUnique(() =>
-    db.runAsync(
-      'INSERT INTO subjects (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)',
-      randomUUID(),
-      name,
-      now,
-      now,
-    ),
+  return saveIfUnique(
+    db,
+    (tx) => nameTaken(tx, name, null),
+    (tx) =>
+      tx.runAsync(
+        'INSERT INTO subjects (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)',
+        randomUUID(),
+        name,
+        now,
+        now,
+      ),
   );
 }
 
 export async function renameSubject(db: SQLiteDatabase, id: string, name: string): Promise<SaveResult> {
-  return saveUnique(() =>
-    db.runAsync(
-      'UPDATE subjects SET name = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL AND name <> ?',
-      name,
-      Date.now(),
-      id,
-      name,
-    ),
+  return saveIfUnique(
+    db,
+    (tx) => nameTaken(tx, name, id),
+    (tx) =>
+      tx.runAsync(
+        'UPDATE subjects SET name = ?, updated_at = MAX(?, updated_at + 1) WHERE id = ? AND deleted_at IS NULL AND name <> ?',
+        name,
+        Date.now(),
+        id,
+        name,
+      ),
   );
 }
 
-// Deleting a Subject deletes its Lessons with it.
+// Deleting a Subject deletes its Lessons and their Questions with it.
 export async function deleteSubject(db: SQLiteDatabase, id: string): Promise<void> {
   const now = Date.now();
-  await db.withExclusiveTransactionAsync(async (tx) => {
+  await writeTransaction(db, async (tx) => {
+    await tx.runAsync('DELETE FROM lesson_parts WHERE lesson_id IN (SELECT id FROM lessons WHERE subject_id = ?)', id);
     await tx.runAsync(
-      'UPDATE lessons SET deleted_at = ?, updated_at = ? WHERE subject_id = ? AND deleted_at IS NULL',
+      `UPDATE questions SET deleted_at = ?, updated_at = MAX(?, updated_at + 1)
+       WHERE deleted_at IS NULL AND lesson_id IN (SELECT id FROM lessons WHERE subject_id = ? AND deleted_at IS NULL)`,
       now,
       now,
       id,
     );
     await tx.runAsync(
-      'UPDATE subjects SET deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL',
+      'UPDATE lessons SET deleted_at = ?, updated_at = MAX(?, updated_at + 1) WHERE subject_id = ? AND deleted_at IS NULL',
+      now,
+      now,
+      id,
+    );
+    await tx.runAsync(
+      'UPDATE subjects SET deleted_at = ?, updated_at = MAX(?, updated_at + 1) WHERE id = ? AND deleted_at IS NULL',
       now,
       now,
       id,
