@@ -124,6 +124,9 @@ function comparable(text: string): string {
   return text.normalize('NFC').replace(/\s+/g, ' ').trim();
 }
 
+// A Source Passage quotes at least a phrase, so the student can find it.
+const MIN_PASSAGE_WORDS = 2;
+
 // What is wrong with `output` as the answer to `request`, beyond its shape:
 // it must be for the same Lesson and part, draw only on the material the
 // request carried, and quote each Transcript Source Passage word for word
@@ -140,7 +143,9 @@ export function problemsWithOutput(
     const where = `questions[${i}]`;
     if (question.origin === 'transcript') {
       if (transcript === null) problems.push(`${where} is from the Transcript, but this part has no Transcript text`);
-      else if (!transcript.includes(comparable(question.sourcePassage ?? ''))) {
+      else if (comparable(question.sourcePassage ?? '').split(' ').length < MIN_PASSAGE_WORDS) {
+        problems.push(`${where}: the source passage is too short to show where the point came from`);
+      } else if (!transcript.includes(comparable(question.sourcePassage ?? ''))) {
         problems.push(`${where}: the source passage is not word for word in this part's Transcript text`);
       }
     } else if (request.interactiveReviewUrl === undefined) {

@@ -104,7 +104,7 @@ If a Lesson shows as failed, the routine's run (listed on the routine's page) sa
 The Transcript work adds one column and changes the shared contract the function bundles, and the app gains native modules (the PDF picker and the WebView that reads the PDF):
 
 ```bash
-npx supabase db push                              # adds lessons.has_transcript
+npx supabase db push                              # adds lessons.transcript_digests
 npx supabase functions deploy generate-lesson
 npx eas-cli@latest build --profile development --platform android   # or the profile you install from
 ```
@@ -114,5 +114,5 @@ The routine itself needs no change: it reads the updated skill from the repo (ke
 To check it on the phone:
 
 1. Add a Lesson with **أرفق التفريغ (PDF)** and the Lesson's PDF, with or without an Interactive Review address. The opening lines of the text show under the file's name: they should read as the PDF does. If they come out as jumbled letters, that PDF's text can't be read on the phone.
-2. The Lesson goes «جارٍ توليد الأسئلة», then «الأسئلة جاهزة». It has one Question per key point of the Transcript; in a Review Session, each shows its Source Passage under the answer, as it reads in the PDF. A Transcript over about 60,000 characters is sent in several parts: the Lesson's screen shows «الأجزاء المكتملة» while they arrive, in any order.
+2. The Lesson goes «جارٍ توليد الأسئلة», then «الأسئلة جاهزة». It has one Question per key point of the Transcript; in a Review Session, each shows its Source Passage under the answer, as it reads in the PDF. A Transcript over about 60,000 characters (the trigger's 65,000 less room for the request's other fields) is sent in several parts: the Lesson's screen shows «الأجزاء المكتملة» while they arrive, in any order.
 3. To check a retry, record a part as failed from the routine's **Run now** with a line like `npx tsx routine/write-questions.ts --fail <lessonId> 1 "test"` (or let one fail). The Lesson shows «تعذّر توليد الأسئلة» and **أعد المحاولة**. Since the text was sent, the app asks for the PDF again; choosing the same file re-sends only the failed part, and its Questions replace any from an earlier run of it.

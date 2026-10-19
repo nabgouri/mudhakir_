@@ -51,7 +51,7 @@ const TABLES: Table[] = [
       subject_id: 'value',
       number: 'value',
       interactive_review_url: 'value',
-      has_transcript: 'boolean',
+      transcript_digests: 'json',
       generation_status: 'value',
       part_count: 'value',
       parts_done: 'json',

@@ -17,13 +17,14 @@
 // Supabase host, so it is never in this session. Run anywhere else, the key
 // is read from SUPABASE_SERVICE_ROLE_KEY.
 
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 
 import { z } from 'zod';
 
 import { GenerateRequest, GeneratedQuestions, problemsWithOutput, toQuestionRecord } from '../shared/generation';
 
-async function rpc(name: string, args: Record<string, unknown>): Promise<string> {
+async function supabase(path: string, init: RequestInit = {}): Promise<unknown> {
   const url = process.env.SUPABASE_URL;
   if (!url) throw new Error('Set SUPABASE_URL to the Supabase project URL (https://<project-ref>.supabase.co).');
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -34,14 +35,26 @@ async function rpc(name: string, args: Record<string, unknown>): Promise<string>
     // secret key (sb_secret_…) goes in apikey only.
     if (!key.startsWith('sb_')) headers.Authorization = `Bearer ${key}`;
   }
-  const response = await fetch(`${url.replace(/\/+$/, '')}/rest/v1/rpc/${name}`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(args),
-  });
+  const response = await fetch(`${url.replace(/\/+$/, '')}/rest/v1/${path}`, { ...init, headers });
   const text = await response.text();
-  if (!response.ok) throw new Error(`${name} failed (${response.status}): ${text}`);
-  return JSON.parse(text) as string;
+  if (!response.ok) throw new Error(`${path} failed (${response.status}): ${text}`);
+  return JSON.parse(text);
+}
+
+async function rpc(name: string, args: Record<string, unknown>): Promise<string> {
+  return (await supabase(`rpc/${name}`, { method: 'POST', body: JSON.stringify(args) })) as string;
+}
+
+// Whether `text` is the part's Transcript text the phone sent: its SHA-256
+// matches the digest the phone stored for the part (`transcript_digests`).
+// The request file is the routine's own copy of the payload, so this
+// catches a copy that changed on the way.
+async function isSentTranscript(lessonId: string, partIndex: number, text: string): Promise<boolean> {
+  const rows = (await supabase(`lessons?id=eq.${lessonId}&select=transcript_digests`)) as {
+    transcript_digests: string[];
+  }[];
+  const sent = rows[0]?.transcript_digests[partIndex];
+  return sent !== undefined && sent === createHash('sha256').update(text, 'utf8').digest('hex');
 }
 
 async function fail(lessonId: string, partIndex: number, reason: string): Promise<void> {
@@ -63,17 +76,23 @@ async function write(outputPath: string, requestPath: string): Promise<boolean> 
   const rawRequest = readJson(requestPath);
   if (raw === undefined || rawRequest === undefined) return false;
 
-  // Records the failure when the output at least says which part it is.
-  async function invalid(problems: string): Promise<false> {
-    console.error(problems);
-    const target = z.object({ lessonId: z.uuid(), partIndex: z.number().int().min(0) }).safeParse(raw);
-    if (target.success) await fail(target.data.lessonId, target.data.partIndex, `Invalid output:\n${problems}`);
-    return false;
-  }
-
   const request = GenerateRequest.safeParse(rawRequest);
   if (!request.success) {
     console.error(`${requestPath} is not the GenerateRequest from the payload:\n${z.prettifyError(request.error)}`);
+    return false;
+  }
+  const { lessonId: requestLesson, partIndex: requestPart, transcriptText } = request.data;
+  if (transcriptText !== undefined && !(await isSentTranscript(requestLesson, requestPart, transcriptText))) {
+    console.error(
+      `The transcriptText in ${requestPath} is not the text the phone sent for this part. Save the payload's JSON to it again, exactly as it is.`,
+    );
+    return false;
+  }
+
+  // Records the failure against the part the request names.
+  async function invalid(problems: string): Promise<false> {
+    console.error(problems);
+    await fail(requestLesson, requestPart, `Invalid output:\n${problems}`);
     return false;
   }
   const parsed = GeneratedQuestions.safeParse(raw);

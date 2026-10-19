@@ -16,7 +16,7 @@ export function serializedLength(text: string): number {
 const BREAK_COST = serializedLength(PARAGRAPH_BREAK);
 
 // The room left for one part's Transcript text in a request with these
-// fields. The Interactive Review address only goes with part 1, so counting
+// fields. The Interactive Review address only goes with the first part, so counting
 // it gives the room every part can use; the part numbers are counted at
 // their widest.
 export function transcriptRoom(request: Omit<GenerateRequestInput, 'transcriptText' | 'partIndex' | 'partCount'>): number {

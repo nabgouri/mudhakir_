@@ -8,6 +8,8 @@ import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import pdfAsset from '../../assets/pdfjs/pdf.min.mjs.txt';
 import workerAsset from '../../assets/pdfjs/pdf.worker.min.mjs.txt';
 
+import { t } from '@/ui/strings';
+
 import { EXTRACTOR_PAGE } from './extractor-page';
 
 // Reading a Transcript's text on the phone. The student picks the PDF; its
@@ -22,6 +24,16 @@ export type PickedTranscript =
   // A scanned PDF has pictures of pages, not text.
   | { status: 'no-text'; name: string }
   | { status: 'failed'; error: string };
+
+// What to tell the student when a PDF gave no text: null when it did, or
+// when they canceled.
+export function pickProblem(picked: PickedTranscript): string | null {
+  if (picked.status === 'failed') {
+    console.warn('Reading a Transcript failed', picked.error);
+    return t.transcriptFailed;
+  }
+  return picked.status === 'no-text' ? t.transcriptNoText : null;
+}
 
 // A large Transcript takes a while; past this the WebView is assumed stuck.
 const TIMEOUT_MS = 3 * 60 * 1000;

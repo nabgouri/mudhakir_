@@ -9,7 +9,7 @@ import { listStudyQuestions } from '@/data/questions';
 import { getSubject } from '@/data/subjects';
 import { due } from '@/engine/study';
 import { requestReminderPermission } from '@/reminders/schedule';
-import { useTranscriptPicker } from '@/transcript/extract';
+import { pickProblem, useTranscriptPicker } from '@/transcript/extract';
 import { Button, Text, TextInput } from '@/ui/components';
 import { t } from '@/ui/strings';
 import { colors, space } from '@/ui/theme';
@@ -37,13 +37,11 @@ export default function SubjectLessonsScreen() {
 
   async function attachTranscript() {
     const picked = await pickTranscript();
-    if (picked.status === 'canceled') return;
     if (picked.status === 'picked') {
       setTranscript({ name: picked.name, text: picked.text });
       setError(null);
-    } else {
-      if (picked.status === 'failed') console.warn('Reading a Transcript failed', picked.error);
-      setError(picked.status === 'no-text' ? t.transcriptNoText : t.transcriptFailed);
+    } else if (picked.status !== 'canceled') {
+      setError(pickProblem(picked));
     }
   }
 

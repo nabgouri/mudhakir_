@@ -75,7 +75,7 @@ export const t = {
   retryGeneration: 'أعد المحاولة',
   retryQueued: 'ستُرسَل الأجزاء التي تعذّر توليدها مرة أخرى.',
   reattachTitle: 'أعد إرفاق التفريغ',
-  reattachMessage: 'أُرسل نص التفريغ ولم يعد محفوظًا على الهاتف. اختر ملف PDF نفسه لإعادة إرسال الأجزاء التي تعذّر توليدها.',
+  reattachMessage: 'أُرسل نص التفريغ ولم يعد محفوظًا على الهاتف. اختر ملف التفريغ نفسه لإعادة إرسال الأجزاء التي تعذّر توليدها.',
   chooseFile: 'اختر الملف',
   differentTranscript: 'هذا الملف لا يطابق تفريغ هذا الدرس. اختر ملف التفريغ نفسه الذي أُرفق أول مرة.',
 
@@ -83,8 +83,8 @@ export const t = {
   readingTranscript: 'جارٍ قراءة التفريغ…',
   removeTranscript: 'إزالة',
   transcriptAttached: (name: string, characters: number) => `التفريغ: ${name}، عدد الأحرف: ${characters}`,
-  transcriptNoText: 'لم يُعثر على نص في هذا الملف، وقد يكون صورًا ممسوحة ضوئيًا. أرفق ملف PDF فيه نص.',
-  transcriptFailed: 'تعذّرت قراءة ملف PDF هذا.',
+  transcriptNoText: 'لم يُعثر على نص في هذا الملف، وقد يكون صورًا ممسوحة ضوئيًا. أرفق تفريغًا فيه نص.',
+  transcriptFailed: 'تعذّرت قراءة هذا التفريغ.',
 
   noQuestions: 'لا توجد أسئلة في هذا الدرس بعد.',
   addQuestion: 'أضف سؤالًا',

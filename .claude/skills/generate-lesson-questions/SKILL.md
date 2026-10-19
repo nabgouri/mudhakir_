@@ -94,9 +94,9 @@ If `transcriptText` is so garbled that its words can't be read (letters out of o
 npx tsx routine/write-questions.ts /tmp/questions-<lessonId>-<partIndex>.json /tmp/request-<lessonId>-<partIndex>.json
 ```
 
-It checks the file against `GeneratedQuestions` and against the request: the same `lessonId` and `partIndex`, Interactive Review and Concept Card Questions only when the request carries the Interactive Review, and every Transcript Source Passage found word for word in `transcriptText`. Then it replaces this part's Questions in Supabase in one transaction and marks the part done. Running it again is safe: it never duplicates Questions.
+It checks that the request file's `transcriptText` is exactly what the phone sent (by its digest), then checks the output against `GeneratedQuestions` and against the request: the same `lessonId` and `partIndex`, Interactive Review and Concept Card Questions only when the request carries the Interactive Review, and every Transcript Source Passage at least two words long and found word for word in `transcriptText`. Then it replaces this part's Questions in Supabase in one transaction and marks the part done. Running it again is safe: it never duplicates Questions.
 
-If it reports a problem, it has recorded the part as failed. Fix only what it names: the file's shape (a missing field, an option count, a stray source passage), or a Transcript Source Passage, by copying it again exactly from `transcriptText`. Never change wording copied from the page. Then run it again: a successful run marks the part done.
+If it says the request file's text is not what the phone sent, save the payload's JSON to the request file again, exactly as it is, and run it again. If it reports any other problem, it has recorded the part as failed. Fix only what it names: the file's shape (a missing field, an option count, a stray source passage), or a Transcript Source Passage, by copying it again exactly from `transcriptText`. Never change wording copied from the page. Then run it again: a successful run marks the part done.
 
 If it fails to reach Supabase, check that `SUPABASE_URL` is set and that the Supabase host has the service-role key as a network secret (`docs/setup-routine.md`), then run it once more.
 

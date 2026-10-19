@@ -7,7 +7,7 @@ import { getLesson, partsToRetry, queueRetry } from '@/data/lessons';
 import { deleteQuestion, listLessonQuestions, type Question } from '@/data/questions';
 import { Button, Text } from '@/ui/components';
 import { syncNow } from '@/sync/sync';
-import { useTranscriptPicker } from '@/transcript/extract';
+import { pickProblem, useTranscriptPicker } from '@/transcript/extract';
 import { confirmDeleteQuestion } from '@/ui/confirm';
 import { t } from '@/ui/strings';
 import { colors, space } from '@/ui/theme';
@@ -49,8 +49,7 @@ export default function LessonQuestionsScreen() {
     const picked = await pickTranscript();
     if (picked.status === 'canceled') return;
     if (picked.status === 'picked') return retry(picked.text);
-    if (picked.status === 'failed') console.warn('Reading a Transcript failed', picked.error);
-    setRetryMessage(picked.status === 'no-text' ? t.transcriptNoText : t.transcriptFailed);
+    setRetryMessage(pickProblem(picked));
   }
 
   function confirmDelete(question: Question) {

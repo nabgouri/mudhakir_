@@ -1,4 +1,4 @@
-import { randomUUID } from 'expo-crypto';
+import { CryptoDigestAlgorithm, digestStringAsync, randomUUID } from 'expo-crypto';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { splitTranscript, transcriptRoom } from '../../shared/transcript';
@@ -15,7 +15,8 @@ export type Lesson = {
   subjectId: string;
   number: number;
   interactiveReviewUrl: string | null;
-  hasTranscript: boolean;
+  // The SHA-256 of each part's Transcript text; empty without a Transcript.
+  transcriptDigests: string[];
   generationStatus: GenerationStatus | null;
   generationError: string | null;
   partCount: number;
@@ -25,15 +26,15 @@ export type Lesson = {
   queuedParts: number;
 };
 
-type LessonRow = Omit<Lesson, 'hasTranscript' | 'partsDone' | 'failedParts'> & {
-  hasTranscript: number;
+type LessonRow = Omit<Lesson, 'transcriptDigests' | 'partsDone' | 'failedParts'> & {
+  transcriptDigests: string;
   partsDone: string;
   failedParts: string;
 };
 
 function lessonColumns(table = 'lessons') {
   return `${table}.id, ${table}.subject_id AS subjectId, ${table}.number,
-    ${table}.interactive_review_url AS interactiveReviewUrl, ${table}.has_transcript AS hasTranscript,
+    ${table}.interactive_review_url AS interactiveReviewUrl, ${table}.transcript_digests AS transcriptDigests,
     ${table}.generation_status AS generationStatus, ${table}.error AS generationError,
     ${table}.part_count AS partCount, ${table}.parts_done AS partsDone, ${table}.failed_parts AS failedParts,
     (SELECT COUNT(*) FROM lesson_parts p WHERE p.lesson_id = ${table}.id) AS queuedParts`;
@@ -42,7 +43,7 @@ function lessonColumns(table = 'lessons') {
 function lessonFromRow<T extends LessonRow>(row: T): Omit<T, keyof LessonRow> & Lesson {
   return {
     ...row,
-    hasTranscript: row.hasTranscript === 1,
+    transcriptDigests: JSON.parse(row.transcriptDigests) as string[],
     partsDone: JSON.parse(row.partsDone) as number[],
     failedParts: JSON.parse(row.failedParts) as number[],
   };
@@ -79,6 +80,12 @@ export function lessonTranscriptParts(
   return splitTranscript(transcriptText, room - SUBJECT_NAME_ROOM);
 }
 
+// What `transcript_digests` holds for a part: the SHA-256 of its text as
+// UTF-8, in hex, as the routine's write script computes it.
+function digest(text: string): Promise<string> {
+  return digestStringAsync(CryptoDigestAlgorithm.SHA256, text);
+}
+
 export type LessonMaterial = { interactiveReviewUrl?: string; transcriptText?: string };
 
 // A Lesson with an Interactive Review or a Transcript waits to be sent for
@@ -98,6 +105,7 @@ export async function addLesson(
   const transcriptParts =
     material.transcriptText === undefined ? [] : lessonTranscriptParts({ id, number, interactiveReviewUrl }, material.transcriptText);
   const partCount = Math.max(transcriptParts.length, interactiveReviewUrl === null ? 0 : 1);
+  const digests = await Promise.all(transcriptParts.map(digest));
   return saveIfUnique(
     db,
     async (tx) =>
@@ -108,14 +116,14 @@ export async function addLesson(
       )) !== null,
     async (tx) => {
       await tx.runAsync(
-        `INSERT INTO lessons (id, subject_id, number, interactive_review_url, has_transcript, generation_status,
+        `INSERT INTO lessons (id, subject_id, number, interactive_review_url, transcript_digests, generation_status,
            part_count, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         id,
         subjectId,
         number,
         interactiveReviewUrl,
-        transcriptParts.length > 0 ? 1 : 0,
+        JSON.stringify(digests),
         partCount === 0 ? null : 'waiting',
         partCount,
         now,
@@ -148,13 +156,16 @@ export type RetryResult =
   | { status: 'queued' }
   // The Transcript's text was sent and is no longer on the phone.
   | { status: 'needs-transcript' }
-  // The re-attached PDF doesn't split into the Lesson's parts.
+  // The re-attached PDF is not the Lesson's Transcript: its parts' digests
+  // differ.
   | { status: 'different-transcript' }
   | { status: 'nothing-to-retry' };
 
 // Queues `partsToRetry` to be sent again, each with its Transcript text
 // when the Lesson has a Transcript. The text comes from the queue when the
-// part is still there, else from `transcriptText`, the re-attached PDF's.
+// part is still there, else from `transcriptText`, the re-attached PDF's,
+// once each part it supplies matches the digest stored when the Lesson was
+// added.
 // The routine replaces a part's Questions when it runs again, so a retry
 // never duplicates them.
 export async function queueRetry(db: SQLiteDatabase, lessonId: string, transcriptText?: string): Promise<RetryResult> {
@@ -177,7 +188,8 @@ export async function queueRetry(db: SQLiteDatabase, lessonId: string, transcrip
         )
       ).map((part) => part.partIndex),
     );
-    const missing = lesson.hasTranscript ? parts.filter((part) => !queued.has(part)) : [];
+    const hasTranscript = lesson.transcriptDigests.length > 0;
+    const missing = hasTranscript ? parts.filter((part) => !queued.has(part)) : [];
     let texts: string[] = [];
     if (missing.length > 0) {
       if (transcriptText === undefined) {
@@ -185,7 +197,8 @@ export async function queueRetry(db: SQLiteDatabase, lessonId: string, transcrip
         return;
       }
       texts = lessonTranscriptParts(lesson, transcriptText);
-      if (texts.length !== lesson.partCount) {
+      const digests = await Promise.all(missing.map((part) => (texts[part] === undefined ? '' : digest(texts[part]))));
+      if (texts.length !== lesson.partCount || missing.some((part, i) => digests[i] !== lesson.transcriptDigests[part])) {
         result = { status: 'different-transcript' };
         return;
       }
@@ -196,7 +209,7 @@ export async function queueRetry(db: SQLiteDatabase, lessonId: string, transcrip
         'INSERT OR REPLACE INTO lesson_parts (lesson_id, part_index, transcript_text) VALUES (?, ?, ?)',
         lessonId,
         part,
-        lesson.hasTranscript ? texts[part] : null,
+        hasTranscript ? texts[part] : null,
       );
     }
     result = { status: 'queued' };

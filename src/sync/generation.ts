@@ -38,9 +38,9 @@ function httpStatus(error: unknown): number | undefined {
 }
 
 // Sends each queued part of a Lesson the cloud already has (pushed and not
-// changed since). A part that can't be sent stays queued, and the next sync
-// tries again; one failure doesn't stop the others, except the routine's
-// hourly limit, which stops this sync's sending.
+// changed since). A part that can't be sent for now stays queued, and the
+// next sync tries again; one failure doesn't stop the others, except the
+// routine's hourly limit, which stops this sync's sending.
 export async function sendQueuedParts(db: SQLiteDatabase): Promise<void> {
   await db.runAsync(
     'DELETE FROM lesson_parts WHERE lesson_id IN (SELECT id FROM lessons WHERE deleted_at IS NOT NULL)',
@@ -57,7 +57,9 @@ export async function sendQueuedParts(db: SQLiteDatabase): Promise<void> {
   for (const part of parts) {
     const request = GenerateRequest.safeParse({
       lessonId: part.lessonId,
-      subjectName: part.subjectName,
+      // Cut to fit the room kept for it (src/data/lessons.ts); it only names
+      // the Lesson for the routine.
+      subjectName: part.subjectName.slice(0, 80),
       lessonNumber: part.number,
       // Only the first part reads the Interactive Review.
       interactiveReviewUrl: part.partIndex === 0 ? (part.interactiveReviewUrl ?? undefined) : undefined,
@@ -72,10 +74,16 @@ export async function sendQueuedParts(db: SQLiteDatabase): Promise<void> {
     const { error } = await client().functions.invoke('generate-lesson', { body: request.data });
     if (error) {
       console.warn('Sending a part for generation failed', part.lessonId, part.partIndex, error);
-      if (httpStatus(error) === 429) return;
-      continue;
+      const status = httpStatus(error);
+      if (status === 429) return;
+      // Offline, a server error or an expired session: try again later.
+      // Any other refusal (no such Lesson, not the student, a request it
+      // rejects) won't change, so the text is not kept for it; the Lesson
+      // stays waiting with nothing queued, and can be retried by hand.
+      if (status === undefined || status >= 500 || status === 401) continue;
     }
-    // Sent, already under way or already done: the cloud has it.
+    // Sent, already under way, already done, or refused for good: the text
+    // leaves the phone.
     await db.runAsync(
       'DELETE FROM lesson_parts WHERE lesson_id = ? AND part_index = ?',
       part.lessonId,

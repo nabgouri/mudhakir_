@@ -124,6 +124,7 @@ describe('an output checked against its request', () => {
     ['without its diacritics', 'فالطهور: هو الباقي على خلقته'],
     ['with a word added', 'فالطَّهور: هو الباقي على خِلقته بإجماع العلماء'],
     ['from another part', 'ولا يُكره الماءُ المتغيِّرُ بطول المُكث'],
+    ['of a single word', 'فالطَّهور:'],
   ])('a Source Passage %s is a problem', (_, sourcePassage) => {
     const output = clone(transcriptOutput);
     output.questions[1].sourcePassage = sourcePassage;
