@@ -1,0 +1,12 @@
+# Supabase CLI settings for this repo. The hosted project is set up once by
+# hand; see docs/setup-supabase.md. The schema is in migrations/.
+project_id = "mudhakir"
+
+[auth]
+site_url = "mudhakir://auth-callback"
+additional_redirect_urls = ["mudhakir://auth-callback"]
+
+[auth.external.google]
+enabled = true
+client_id = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)"
+secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"

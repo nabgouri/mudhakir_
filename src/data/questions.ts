@@ -3,6 +3,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { rate, type QuestionState, type Rating, type StudyQuestion } from '@/engine/study';
 
+import { writeTransaction } from './database';
 import type { QuestionContent } from './input';
 
 export type Question = QuestionContent & {
@@ -136,7 +137,7 @@ export async function listStudyQuestions(db: SQLiteDatabase): Promise<StudyQuest
 // Appends the Review and stores the Question's new schedule, together. The
 // schedule is derived from the Reviews, so it does not change `updated_at`.
 export async function recordReview(db: SQLiteDatabase, questionId: string, rating: Rating, now: Date): Promise<void> {
-  await db.withExclusiveTransactionAsync(async (tx) => {
+  await writeTransaction(db, async (tx) => {
     const row = await tx.getFirstAsync<{ schedule: string | null }>(
       'SELECT schedule FROM questions WHERE id = ? AND deleted_at IS NULL',
       questionId,

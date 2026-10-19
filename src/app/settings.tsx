@@ -8,6 +8,7 @@ import { parseCoordinate, parseDelayMinutes } from '@/data/input';
 import { getSettings, saveSettings, type Place, type Settings } from '@/data/settings';
 import { CALCULATION_METHODS, PRAYERS } from '@/engine/reminders';
 import { requestReminderPermission, rescheduleReminders } from '@/reminders/schedule';
+import { BackupSection } from '@/ui/backup-section';
 import { Button, Text, TextInput } from '@/ui/components';
 import { t } from '@/ui/strings';
 import { colors, space } from '@/ui/theme';
@@ -23,9 +24,9 @@ function placeLabel(place: Place): string {
   return city ? cityLabel(city) : t.coordinates(place.latitude, place.longitude);
 }
 
-// Where and when Reminders fire: the place and calculation method that give
-// the prayer times, the delay after the adhan, and which prayers to use.
-// Nothing is saved until "حفظ".
+// Sign-in and backup, then where and when Reminders fire: the place and
+// calculation method that give the prayer times, the delay after the adhan,
+// and which prayers to use. Nothing is saved until "حفظ".
 export default function SettingsScreen() {
   const db = useSQLiteContext();
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -43,6 +44,19 @@ export default function SettingsScreen() {
       setDelayText(String(loaded.delayMinutes));
     });
   }, [db]);
+
+  // A sync brought changes, perhaps these settings restored from the backup
+  // on a new phone: show them, and ask for the notification permission the
+  // restored Reminders need.
+  async function synced() {
+    const loaded = await getSettings(db);
+    setSettings(loaded);
+    setDelayText(String(loaded.delayMinutes));
+    setTyping(false);
+    setError(null);
+    setNotice(null);
+    if (loaded.place !== null && (await requestReminderPermission())) await rescheduleReminders(db);
+  }
 
   if (settings === null) return <Stack.Screen options={{ title: t.settings }} />;
 
@@ -92,6 +106,7 @@ export default function SettingsScreen() {
   return (
     <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
       <Stack.Screen options={{ title: t.settings }} />
+      <BackupSection onChanged={synced} />
       <Text style={styles.heading}>{t.remindersSection}</Text>
 
       <View style={styles.section}>
