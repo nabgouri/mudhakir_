@@ -1,11 +1,12 @@
 import { Link, Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback } from 'react';
-import { Alert, FlatList, StyleSheet, View } from 'react-native';
+import { FlatList, StyleSheet, View } from 'react-native';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { getLesson } from '@/data/lessons';
 import { deleteQuestion, listLessonQuestions, type Question } from '@/data/questions';
 import { Button, Text } from '@/ui/components';
+import { confirmDeleteQuestion } from '@/ui/confirm';
 import { t } from '@/ui/strings';
 import { colors, space } from '@/ui/theme';
 import { useDbQuery } from '@/ui/use-db-query';
@@ -23,17 +24,10 @@ export default function LessonQuestionsScreen() {
   const { db, data, reload } = useDbQuery(load);
 
   function confirmDelete(question: Question) {
-    Alert.alert(t.deleteQuestionTitle, t.deleteQuestionMessage, [
-      { text: t.cancel, style: 'cancel' },
-      {
-        text: t.delete,
-        style: 'destructive',
-        onPress: async () => {
-          await deleteQuestion(db, question.id);
-          await reload();
-        },
-      },
-    ]);
+    confirmDeleteQuestion(async () => {
+      await deleteQuestion(db, question.id);
+      await reload();
+    });
   }
 
   if (data && data.lesson === null) {

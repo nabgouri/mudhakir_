@@ -127,6 +127,14 @@ describe('due', () => {
     expect(due(overdue, ASR, {}, { newPerDay: 10 })).toHaveLength(12);
   });
 
+  test('the daily limit counts new Questions introduced in every Subject, also when filtered', () => {
+    const fiqhToday = Array.from({ length: 10 }, (_, i) =>
+      question(`fiqh-${i}`, { subjectId: 'fiqh', state: reviewedState(at(9, 0, 1), at(7)) }),
+    );
+    const aqeedahNew = Array.from({ length: 5 }, (_, i) => question(`aqeedah-${i}`, { subjectId: 'aqeedah', createdAt: i }));
+    expect(due([...fiqhToday, ...aqeedahNew], ASR, { subjectId: 'aqeedah' }, { newPerDay: 10 })).toEqual([]);
+  });
+
   test('a Subject filter keeps only that Subject’s Questions', () => {
     const questions = [
       question('fiqh-new', { subjectId: 'fiqh' }),

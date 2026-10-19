@@ -41,6 +41,10 @@ const SELECT_QUESTION = `
     q.source_passage AS sourcePassage
   ${FROM_LIVE_QUESTIONS}`;
 
+function parseSchedule(schedule: string | null): QuestionState | null {
+  return schedule === null ? null : (JSON.parse(schedule) as QuestionState);
+}
+
 function fromRow(row: QuestionRow): Question {
   const base = {
     id: row.id,
@@ -125,7 +129,7 @@ export async function listStudyQuestions(db: SQLiteDatabase): Promise<StudyQuest
     id: row.id,
     subjectId: row.subjectId,
     createdAt: row.createdAt,
-    state: row.schedule === null ? null : (JSON.parse(row.schedule) as QuestionState),
+    state: parseSchedule(row.schedule),
   }));
 }
 
@@ -138,7 +142,7 @@ export async function recordReview(db: SQLiteDatabase, questionId: string, ratin
       questionId,
     );
     if (!row) return;
-    const state = rate(row.schedule === null ? null : JSON.parse(row.schedule), rating, now);
+    const state = rate(parseSchedule(row.schedule), rating, now);
     await tx.runAsync(
       'INSERT INTO reviews (id, question_id, rating, reviewed_at) VALUES (?, ?, ?, ?)',
       randomUUID(),

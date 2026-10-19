@@ -1,12 +1,13 @@
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { deleteQuestion, getQuestion, listStudyQuestions, recordReview, type Question } from '@/data/questions';
 import { DEFAULT_SESSION_SIZE, nextSession, ratingForChoice, type Rating } from '@/engine/study';
 import { Button, Text } from '@/ui/components';
+import { confirmDeleteQuestion } from '@/ui/confirm';
 import { t } from '@/ui/strings';
 import { colors, space } from '@/ui/theme';
 
@@ -101,17 +102,10 @@ export default function ReviewSessionScreen() {
   }
 
   function confirmDelete(id: string) {
-    Alert.alert(t.deleteQuestionTitle, t.deleteQuestionMessage, [
-      { text: t.cancel, style: 'cancel' },
-      {
-        text: t.delete,
-        style: 'destructive',
-        onPress: async () => {
-          await deleteQuestion(db, id);
-          advance();
-        },
-      },
-    ]);
+    confirmDeleteQuestion(async () => {
+      await deleteQuestion(db, id);
+      advance();
+    });
   }
 
   function close() {

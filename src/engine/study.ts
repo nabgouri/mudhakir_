@@ -32,6 +32,9 @@ export type StudyQuestion = {
 
 export type Filter = { subjectId?: string };
 
+// From the student's settings; the default until a settings screen exists.
+export type Limits = { newPerDay?: number };
+
 export const DEFAULT_NEW_PER_DAY = 10;
 export const DEFAULT_SESSION_SIZE = 5;
 
@@ -39,7 +42,7 @@ export const DEFAULT_SESSION_SIZE = 5;
 // two prayers, so a Question rated Again is due at the next Reminder.
 const scheduler = fsrs();
 
-const GRADES: Record<Rating, Grade> = {
+const FSRS_RATINGS: Record<Rating, Grade> = {
   again: FsrsRating.Again,
   hard: FsrsRating.Hard,
   good: FsrsRating.Good,
@@ -88,7 +91,7 @@ function toCard(state: QuestionState | null, now: Date): Card {
 
 // The Question's new state after a Review with this Rating at `now`.
 export function rate(state: QuestionState | null, rating: Rating, now: Date): QuestionState {
-  const { card } = scheduler.next(toCard(state, now), now, GRADES[rating]);
+  const { card } = scheduler.next(toCard(state, now), now, FSRS_RATINGS[rating]);
   if (card.state === State.New) throw new Error('A reviewed Question cannot be new');
   return {
     due: card.due.getTime(),
@@ -104,7 +107,7 @@ export function rate(state: QuestionState | null, rating: Rating, now: Date): Qu
   };
 }
 
-// A multiple-choice answer is graded for the student.
+// A Multiple-Choice answer is rated for the student.
 export function ratingForChoice(correct: boolean): Rating {
   return correct ? 'good' : 'again';
 }
@@ -117,11 +120,13 @@ function startOfDay(now: Date): number {
 // reviewed, most overdue first, then new Questions, earliest added first.
 // New Questions are capped so that at most `newPerDay` are first reviewed on
 // one calendar day (the phone's local day), counted across all Subjects.
+// Only the Questions passed in count, so a deleted Question introduced today
+// frees its place; deleting is deliberate, so that is accepted.
 export function due(
   questions: readonly StudyQuestion[],
   now: Date,
   filter: Filter = {},
-  { newPerDay = DEFAULT_NEW_PER_DAY }: { newPerDay?: number } = {},
+  { newPerDay = DEFAULT_NEW_PER_DAY }: Limits = {},
 ): StudyQuestion[] {
   const today = startOfDay(now);
   const introducedToday = questions.filter((q) => q.state !== null && q.state.firstReview >= today).length;
@@ -144,16 +149,18 @@ export function nextSession(
   now: Date,
   size: number = DEFAULT_SESSION_SIZE,
   filter: Filter = {},
-  limits: { newPerDay?: number } = {},
+  limits: Limits = {},
 ): StudyQuestion[] {
   return due(questions, now, filter, limits).slice(0, size);
 }
 
-// How many Questions a Review Session for each Subject could ask now.
+// How many Questions a Review Session for each Subject could ask now. The
+// daily new-Question limit is shared, so the counts can add up to more than
+// one day introduces.
 export function dueCountsBySubject(
   questions: readonly StudyQuestion[],
   now: Date,
-  limits: { newPerDay?: number } = {},
+  limits: Limits = {},
 ): Map<string, number> {
   const counts = new Map<string, number>();
   for (const subjectId of new Set(questions.map((q) => q.subjectId))) {
