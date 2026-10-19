@@ -27,6 +27,7 @@ Open the link EAS prints on the phone to download and install the APK.
 
 ## Layout
 
-- `src/app/`: screens (Expo Router). `index.tsx` lists Subjects; `subjects/[subjectId].tsx` lists a Subject's Lessons.
-- `src/data/`: the local SQLite database. Deletions set `deleted_at` instead of removing rows, so a later sync can send them to the cloud.
+- `src/app/`: screens (Expo Router). `index.tsx` lists Subjects with their due counts; `subjects/[subjectId].tsx` lists a Subject's Lessons; `lessons/[lessonId].tsx` lists a Lesson's Questions; `questions/` adds and edits a Question; `review.tsx` is the full-screen Review Session.
+- `src/engine/`: the study engine, pure TypeScript with no I/O. It schedules Questions with FSRS (`ts-fsrs`) and picks what a Review Session asks: `rate`, `due`, `nextSession`. Its tests are the study-engine seam.
+- `src/data/`: the local SQLite database. Deletions set `deleted_at` instead of removing rows, so a later sync can send them to the cloud. Reviews are append-only: triggers refuse any change or removal.
 - `src/ui/`: shared components, theme, and all interface text (`strings.ts`).

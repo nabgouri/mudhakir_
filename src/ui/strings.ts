@@ -1,7 +1,20 @@
 import { MAX_LESSON_NUMBER } from '@/data/input';
 
+// Arabic counted nouns: the form depends on the number (1, 2, 3–10, 11–99,
+// and 100s), e.g. سؤال واحد، سؤالان، ٣ أسئلة، ١١ سؤالًا، ١٠٠ سؤال.
+function counted(n: number, forms: { zero: string; one: string; two: string; few: string; many: string; hundred: string }) {
+  if (n === 0) return forms.zero;
+  if (n === 1) return forms.one;
+  if (n === 2) return forms.two;
+  const lastTwo = n % 100;
+  if (lastTwo >= 3 && lastTwo <= 10) return `${n} ${forms.few}`;
+  if (lastTwo >= 11) return `${n} ${forms.many}`;
+  return `${n} ${forms.hundred}`;
+}
+
 // Every piece of interface text, in Arabic. Terms follow GLOSSARY.md:
-// Subject = مادة, Lesson = درس.
+// Subject = مادة, Lesson = درس, Question = سؤال, Review Session = جلسة مراجعة,
+// Source Passage = النص المصدر.
 export const t = {
   subjects: 'المواد',
   noSubjects: 'لا توجد مواد بعد. أضف أول مادة لتبدأ.',
@@ -13,15 +26,22 @@ export const t = {
   delete: 'حذف',
   subjectNameRequired: 'اكتب اسم المادة.',
   subjectNameTaken: 'توجد مادة بهذا الاسم.',
-  lessonCount: (n: number) => {
-    if (n === 0) return 'لا دروس';
-    if (n === 1) return 'درس واحد';
-    if (n === 2) return 'درسان';
-    const lastTwo = n % 100;
-    if (lastTwo >= 3 && lastTwo <= 10) return `${n} دروس`;
-    if (lastTwo >= 11) return `${n} درسًا`;
-    return `${n} درس`;
-  },
+  lessonCount: (n: number) =>
+    counted(n, { zero: 'لا دروس', one: 'درس واحد', two: 'درسان', few: 'دروس', many: 'درسًا', hundred: 'درس' }),
+  dueCount: (n: number) =>
+    counted(n, {
+      zero: 'لا أسئلة مستحقة',
+      one: 'سؤال واحد مستحق',
+      two: 'سؤالان مستحقان',
+      few: 'أسئلة مستحقة',
+      many: 'سؤالًا مستحقًا',
+      hundred: 'سؤال مستحق',
+    }),
+  questionCount: (n: number) =>
+    counted(n, { zero: 'لا أسئلة', one: 'سؤال واحد', two: 'سؤالان', few: 'أسئلة', many: 'سؤالًا', hundred: 'سؤال' }),
+  reviewAll: 'ابدأ جلسة مراجعة',
+  reviewSubject: 'راجع هذه المادة',
+  edit: 'تعديل',
   deleteSubjectTitle: 'حذف المادة',
   deleteSubjectMessage: (name: string) => `هل تريد حذف مادة «${name}» وكل دروسها؟`,
 
@@ -35,4 +55,43 @@ export const t = {
   deleteLessonTitle: 'حذف الدرس',
   deleteLessonMessage: (n: number) => `هل تريد حذف الدرس ${n}؟`,
   subjectNotFound: 'لم يتم العثور على هذه المادة.',
+  lessonNotFound: 'لم يتم العثور على هذا الدرس.',
+  lessonTitle: (subjectName: string, n: number) => `${subjectName}: الدرس ${n}`,
+
+  noQuestions: 'لا توجد أسئلة في هذا الدرس بعد.',
+  addQuestion: 'أضف سؤالًا',
+  newQuestion: 'سؤال جديد',
+  editQuestion: 'تعديل السؤال',
+  questionNotFound: 'لم يتم العثور على هذا السؤال.',
+  multipleChoice: 'اختيار من متعدد',
+  openQuestion: 'سؤال مفتوح',
+  promptLabel: 'السؤال',
+  promptPlaceholder: 'نص السؤال',
+  optionsLabel: 'الخيارات (اختر الصحيح منها)',
+  optionPlaceholder: (n: number) => `الخيار ${n}`,
+  addOption: 'أضف خيارًا',
+  removeOption: 'إزالة',
+  correct: 'صحيح',
+  answerLabel: 'الإجابة',
+  answerPlaceholder: 'نص الإجابة',
+  sourcePassage: 'النص المصدر',
+  questionProblems: {
+    promptRequired: 'اكتب نص السؤال.',
+    twoOptionsRequired: 'اكتب خيارين على الأقل.',
+    correctOptionRequired: 'اختر الخيار الصحيح.',
+    answerRequired: 'اكتب الإجابة.',
+  },
+  deleteQuestionTitle: 'حذف السؤال',
+  deleteQuestionMessage: 'هل تريد حذف هذا السؤال؟',
+
+  showAnswer: 'أظهر الإجابة',
+  ratings: { again: 'مرة أخرى', hard: 'صعب', good: 'جيد', easy: 'سهل' },
+  right: 'إجابة صحيحة',
+  wrong: 'إجابة خاطئة',
+  next: 'التالي',
+  close: 'إغلاق',
+  continueReview: 'تابع المراجعة',
+  sessionProgress: (current: number, total: number) => `${current} من ${total}`,
+  sessionDone: 'أحسنت، انتهت جلسة المراجعة.',
+  nothingDue: 'لا توجد أسئلة مستحقة الآن.',
 } as const;

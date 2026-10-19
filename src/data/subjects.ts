@@ -48,10 +48,17 @@ export async function renameSubject(db: SQLiteDatabase, id: string, name: string
   );
 }
 
-// Deleting a Subject deletes its Lessons with it.
+// Deleting a Subject deletes its Lessons and their Questions with it.
 export async function deleteSubject(db: SQLiteDatabase, id: string): Promise<void> {
   const now = Date.now();
   await db.withExclusiveTransactionAsync(async (tx) => {
+    await tx.runAsync(
+      `UPDATE questions SET deleted_at = ?, updated_at = ?
+       WHERE deleted_at IS NULL AND lesson_id IN (SELECT id FROM lessons WHERE subject_id = ? AND deleted_at IS NULL)`,
+      now,
+      now,
+      id,
+    );
     await tx.runAsync(
       'UPDATE lessons SET deleted_at = ?, updated_at = ? WHERE subject_id = ? AND deleted_at IS NULL',
       now,

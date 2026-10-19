@@ -28,3 +28,39 @@ export function parseLessonNumber(raw: string): number | null {
   const number = Number(text);
   return number >= 1 && number <= MAX_LESSON_NUMBER ? number : null;
 }
+
+export type QuestionDraft =
+  | { kind: 'multiple-choice'; prompt: string; options: string[]; correctOption: number | null }
+  | { kind: 'open'; prompt: string; answer: string };
+
+export type QuestionContent =
+  | { kind: 'multiple-choice'; prompt: string; options: string[]; correctOption: number }
+  | { kind: 'open'; prompt: string; answer: string };
+
+export type QuestionProblem = 'promptRequired' | 'twoOptionsRequired' | 'correctOptionRequired' | 'answerRequired';
+
+// Keeps line breaks, since a prompt or answer may quote several lines.
+function cleanText(raw: string): string {
+  return raw.normalize('NFC').replace(INVISIBLE_MARKS, '').trim();
+}
+
+// Empty options are dropped; the correct option keeps pointing at the same
+// text.
+export function parseQuestion(
+  draft: QuestionDraft,
+): { ok: true; value: QuestionContent } | { ok: false; problem: QuestionProblem } {
+  const prompt = cleanText(draft.prompt);
+  if (prompt === '') return { ok: false, problem: 'promptRequired' };
+
+  if (draft.kind === 'open') {
+    const answer = cleanText(draft.answer);
+    if (answer === '') return { ok: false, problem: 'answerRequired' };
+    return { ok: true, value: { kind: 'open', prompt, answer } };
+  }
+
+  const kept = draft.options.map((text, index) => ({ text: cleanText(text), index })).filter((o) => o.text !== '');
+  if (kept.length < 2) return { ok: false, problem: 'twoOptionsRequired' };
+  const correctOption = kept.findIndex((o) => o.index === draft.correctOption);
+  if (correctOption === -1) return { ok: false, problem: 'correctOptionRequired' };
+  return { ok: true, value: { kind: 'multiple-choice', prompt, options: kept.map((o) => o.text), correctOption } };
+}

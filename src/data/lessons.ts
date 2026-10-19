@@ -33,12 +33,31 @@ export async function addLesson(db: SQLiteDatabase, subjectId: string, number: n
   );
 }
 
-export async function deleteLesson(db: SQLiteDatabase, id: string): Promise<void> {
-  const now = Date.now();
-  await db.runAsync(
-    'UPDATE lessons SET deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL',
-    now,
-    now,
+export async function getLesson(db: SQLiteDatabase, id: string): Promise<(Lesson & { subjectName: string }) | null> {
+  return db.getFirstAsync<Lesson & { subjectName: string }>(
+    `SELECT l.id, l.subject_id AS subjectId, l.number, s.name AS subjectName
+     FROM lessons l JOIN subjects s ON s.id = l.subject_id
+     WHERE l.id = ? AND l.deleted_at IS NULL AND s.deleted_at IS NULL`,
     id,
   );
+}
+
+// Deleting a Lesson deletes its Questions with it. Their Reviews stay, since
+// Reviews are append-only.
+export async function deleteLesson(db: SQLiteDatabase, id: string): Promise<void> {
+  const now = Date.now();
+  await db.withExclusiveTransactionAsync(async (tx) => {
+    await tx.runAsync(
+      'UPDATE questions SET deleted_at = ?, updated_at = ? WHERE lesson_id = ? AND deleted_at IS NULL',
+      now,
+      now,
+      id,
+    );
+    await tx.runAsync(
+      'UPDATE lessons SET deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL',
+      now,
+      now,
+      id,
+    );
+  });
 }

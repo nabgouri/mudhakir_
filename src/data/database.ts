@@ -26,6 +26,43 @@ const MIGRATIONS: string[] = [
   );
   CREATE UNIQUE INDEX lessons_live_number ON lessons (subject_id, number) WHERE deleted_at IS NULL;
   `,
+  // `options` is a JSON array of strings for a Multiple-Choice Question.
+  // `origin` is null for a Question the student added by hand. `schedule` is
+  // the study engine's state as JSON, null until the first Review; it is
+  // updated in the same transaction that appends the Review.
+  `
+  CREATE TABLE questions (
+    id TEXT PRIMARY KEY NOT NULL,
+    lesson_id TEXT NOT NULL REFERENCES lessons (id),
+    kind TEXT NOT NULL CHECK (kind IN ('multiple-choice', 'open')),
+    origin TEXT CHECK (origin IN ('interactive-review', 'concept-card', 'transcript')),
+    prompt TEXT NOT NULL,
+    options TEXT,
+    correct_option INTEGER,
+    answer TEXT,
+    source_passage TEXT,
+    edited INTEGER NOT NULL DEFAULT 0,
+    schedule TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    deleted_at INTEGER
+  );
+  CREATE INDEX questions_lesson ON questions (lesson_id);
+
+  CREATE TABLE reviews (
+    id TEXT PRIMARY KEY NOT NULL,
+    question_id TEXT NOT NULL REFERENCES questions (id),
+    rating TEXT NOT NULL CHECK (rating IN ('again', 'hard', 'good', 'easy')),
+    reviewed_at INTEGER NOT NULL
+  );
+  CREATE INDEX reviews_question ON reviews (question_id);
+
+  -- Reviews are append-only: they are never changed or removed.
+  CREATE TRIGGER reviews_no_update BEFORE UPDATE ON reviews
+  BEGIN SELECT RAISE(ABORT, 'reviews are append-only'); END;
+  CREATE TRIGGER reviews_no_delete BEFORE DELETE ON reviews
+  BEGIN SELECT RAISE(ABORT, 'reviews are append-only'); END;
+  `,
 ];
 
 export async function migrate(db: SQLiteDatabase): Promise<void> {
