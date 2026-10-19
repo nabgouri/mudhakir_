@@ -1,11 +1,13 @@
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Link, Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Alert, FlatList, StyleSheet, View } from 'react-native';
+import { Alert, FlatList, Pressable, StyleSheet, View } from 'react-native';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { parseLessonNumber } from '@/data/input';
 import { addLesson, deleteLesson, listLessons, type Lesson } from '@/data/lessons';
+import { listStudyQuestions } from '@/data/questions';
 import { getSubject } from '@/data/subjects';
+import { due } from '@/engine/study';
 import { Button, Text, TextInput } from '@/ui/components';
 import { t } from '@/ui/strings';
 import { colors, space } from '@/ui/theme';
@@ -17,7 +19,8 @@ export default function SubjectLessonsScreen() {
     async (db: SQLiteDatabase) => {
       const subject = await getSubject(db, subjectId);
       const lessons = subject ? await listLessons(db, subjectId) : [];
-      return { subject, lessons };
+      const dueCount = subject ? due(await listStudyQuestions(db), new Date(), { subjectId }).length : 0;
+      return { subject, lessons, dueCount };
     },
     [subjectId],
   );
@@ -68,6 +71,13 @@ export default function SubjectLessonsScreen() {
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
           <View style={styles.form}>
+            <View style={[styles.card, styles.row]}>
+              <Text style={styles.meta}>{t.dueCount(data?.dueCount ?? 0)}</Text>
+              <View style={styles.spacer} />
+              <Link href={{ pathname: '/review', params: { subjectId } }} asChild>
+                <Button title={t.reviewSubject} />
+              </Link>
+            </View>
             <View style={styles.row}>
               <TextInput
                 value={numberText}
@@ -85,8 +95,11 @@ export default function SubjectLessonsScreen() {
         ListEmptyComponent={data ? <Text style={styles.empty}>{t.noLessons}</Text> : undefined}
         renderItem={({ item }) => (
           <View style={[styles.card, styles.row]}>
-            <Text style={styles.name}>{t.lesson(item.number)}</Text>
-            <View style={styles.spacer} />
+            <Link href={{ pathname: '/lessons/[lessonId]', params: { lessonId: item.id } }} asChild>
+              <Pressable style={styles.spacer}>
+                <Text style={styles.name}>{t.lesson(item.number)}</Text>
+              </Pressable>
+            </Link>
             <Button title={t.delete} variant="danger" onPress={() => confirmDelete(item)} />
           </View>
         )}
@@ -123,6 +136,10 @@ const styles = StyleSheet.create({
   },
   spacer: {
     flex: 1,
+  },
+  meta: {
+    fontSize: 16,
+    color: colors.textSecondary,
   },
   error: {
     color: colors.danger,

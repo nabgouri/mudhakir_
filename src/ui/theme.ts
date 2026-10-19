@@ -7,6 +7,8 @@ export const colors = {
   primary: '#1F5F4A',
   onPrimary: '#FFFFFF',
   danger: '#B3261E',
+  rightSurface: '#E3F1EA',
+  wrongSurface: '#F9E3E1',
 } as const;
 
 // Noto Naskh Arabic draws diacritics (تشكيل) clearly at reading sizes.
