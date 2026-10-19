@@ -8,9 +8,8 @@ import { useEffect } from 'react';
 import { AppState } from 'react-native';
 
 import { DATABASE_NAME, migrate } from '@/data/database';
-import { getSettings } from '@/data/settings';
 import { registerBackgroundReschedule } from '@/reminders/background';
-import { REMINDER_URL, requestReminderPermission, rescheduleReminders } from '@/reminders/schedule';
+import { REMINDER_URL, rescheduleReminders } from '@/reminders/schedule';
 import { colors, fonts } from '@/ui/theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -37,12 +36,7 @@ function Reminders() {
   const db = useSQLiteContext();
 
   useEffect(() => {
-    getSettings(db)
-      .then(async (settings) => {
-        if (settings.place !== null) await requestReminderPermission();
-        await rescheduleReminders(db);
-      })
-      .catch((error) => console.warn('Setting up Reminders failed', error));
+    rescheduleReminders(db);
     registerBackgroundReschedule().catch((error) => console.warn('Registering the background task failed', error));
 
     const appState = AppState.addEventListener('change', (state) => {

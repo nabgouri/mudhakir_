@@ -2,9 +2,9 @@
 // when something will be due. Part of the study engine: pure, no I/O.
 // Prayer times come from the `adhan` library, calculated for the phone's
 // local calendar days, so they need no network.
-import { CalculationMethod, Coordinates, PrayerTimes } from 'adhan';
+import { CalculationMethod, Coordinates, HighLatitudeRule, PolarCircleResolution, PrayerTimes } from 'adhan';
 
-import { due, type Limits, type StudyQuestion } from './study';
+import { due, type StudyQuestion } from './study';
 
 export const PRAYERS = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'] as const;
 export type Prayer = (typeof PRAYERS)[number];
@@ -25,8 +25,6 @@ export const CALCULATION_METHODS = [
   'Turkey',
 ] as const satisfies readonly (keyof typeof CalculationMethod)[];
 export type CalculationMethodName = (typeof CALCULATION_METHODS)[number];
-
-export const DEFAULT_DELAY_MINUTES = 15;
 
 export type PrayerSettings = {
   latitude: number;
@@ -52,10 +50,14 @@ export function reminderTimes(
   settings: PrayerSettings,
   range: DateRange,
   questions: readonly StudyQuestion[],
-  limits: Limits = {},
 ): Reminder[] {
   const coordinates = new Coordinates(settings.latitude, settings.longitude);
   const parameters = CalculationMethod[settings.method]();
+  // Far north or south, twilight or the sun itself may not rise or set: Fajr
+  // and Isha then follow a share of the night, and on polar days the nearest
+  // day that has the prayer is used, so no prayer goes missing.
+  parameters.highLatitudeRule = HighLatitudeRule.recommended(coordinates);
+  parameters.polarCircleResolution = PolarCircleResolution.AqrabYaum;
   const reminders: Reminder[] = [];
 
   // The delay can push a Reminder past midnight, so start a day early.
@@ -65,7 +67,8 @@ export function reminderTimes(
     for (const prayer of PRAYERS) {
       if (!settings.prayers[prayer]) continue;
       const at = new Date(times[prayer].getTime() + settings.delayMinutes * MINUTE);
-      if (at > range.from && at <= range.to && due(questions, at, {}, limits).length > 0) {
+      if (Number.isNaN(at.getTime())) continue;
+      if (at > range.from && at <= range.to && due(questions, at).length > 0) {
         reminders.push({ prayer, at });
       }
     }

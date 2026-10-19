@@ -26,7 +26,8 @@ async function ensureChannel() {
   });
 }
 
-// Asks once; Android keeps the answer, so later calls return it silently.
+// Asks for the notification permission when it is not yet granted. Android
+// stops showing the prompt after the student refuses it twice.
 export async function requestReminderPermission(): Promise<boolean> {
   await ensureChannel();
   const current = await Notifications.getPermissionsAsync();
@@ -34,23 +35,23 @@ export async function requestReminderPermission(): Promise<boolean> {
   return (await Notifications.requestPermissionsAsync()).granted;
 }
 
+// New Reminders are scheduled before stale ones are cancelled, so a reschedule
+// cut short (the app killed mid-way) never leaves the student with none. A
+// Reminder's identifier is its fire time, so scheduling it again replaces it.
 async function reschedule(db: SQLiteDatabase): Promise<void> {
-  const scheduled = await Notifications.getAllScheduledNotificationsAsync();
-  await Promise.all(
-    scheduled
-      .filter((request) => request.content.data?.kind === KIND)
-      .map((request) => Notifications.cancelScheduledNotificationAsync(request.identifier)),
-  );
-
   const settings = prayerSettings(await getSettings(db));
-  if (settings === null) return;
-  if (!(await Notifications.getPermissionsAsync()).granted) return;
-  await ensureChannel();
-
   const now = new Date();
   const range = { from: now, to: new Date(now.getTime() + DAYS_AHEAD * DAY) };
-  for (const reminder of reminderTimes(settings, range, await listStudyQuestions(db))) {
+  const reminders =
+    settings !== null && (await Notifications.getPermissionsAsync()).granted
+      ? reminderTimes(settings, range, await listStudyQuestions(db))
+      : [];
+  const wanted = new Set(reminders.map((reminder) => `${KIND}-${reminder.at.getTime()}`));
+
+  if (reminders.length > 0) await ensureChannel();
+  for (const reminder of reminders) {
     await Notifications.scheduleNotificationAsync({
+      identifier: `${KIND}-${reminder.at.getTime()}`,
       content: {
         title: t.reminderTitle,
         body: t.reminderBody(reminder.prayer),
@@ -59,6 +60,13 @@ async function reschedule(db: SQLiteDatabase): Promise<void> {
       trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: reminder.at, channelId: CHANNEL_ID },
     });
   }
+
+  const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+  await Promise.all(
+    scheduled
+      .filter((request) => request.content.data?.kind === KIND && !wanted.has(request.identifier))
+      .map((request) => Notifications.cancelScheduledNotificationAsync(request.identifier)),
+  );
 }
 
 let queue: Promise<void> = Promise.resolve();

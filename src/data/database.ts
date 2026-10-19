@@ -66,7 +66,8 @@ const MIGRATIONS: string[] = [
   // The student's settings: one row. `city_id` names a bundled city, or is
   // null when the coordinates were typed by hand; `latitude` and `longitude`
   // are null until a place is chosen, and no Reminder is scheduled until
-  // then. `prayers` is a JSON object of the prayers turned on.
+  // then. `prayers` is a JSON object of the prayers turned on. The first row
+  // holds the defaults: Muslim World League, 15 minutes after the adhan.
   `
   CREATE TABLE settings (
     id INTEGER PRIMARY KEY NOT NULL CHECK (id = 1),

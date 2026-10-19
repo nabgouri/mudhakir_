@@ -71,6 +71,17 @@ describe('reminderTimes', () => {
     expect(reminders.map((r) => r.at.getDate())).toEqual([5, 5, 5, 6, 6, 6, 6, 6, 7, 7]);
   });
 
+  test.each([
+    ['Oslo in midsummer, when twilight lasts all night', 59.9139, 10.7522],
+    ['Tromsø under the midnight sun', 69.6492, 18.9553],
+  ])('gives all five prayers in %s', (_place, latitude, longitude) => {
+    const settings = { ...MAKKAH, latitude, longitude, method: 'MuslimWorldLeague' as const };
+    const midsummer = { from: new Date(2026, 5, 21, 0, 0), to: new Date(2026, 5, 21, 23, 59) };
+    const reminders = reminderTimes(settings, midsummer, SOMETHING_DUE);
+    // The clock is on Makkah time, so the day's prayers don't start at Fajr.
+    expect(prayers(reminders).sort()).toEqual(['asr', 'dhuhr', 'fajr', 'isha', 'maghrib']);
+  });
+
   test("keeps the previous day's Isha when the delay carries it past midnight", () => {
     const settings = { ...MAKKAH, delayMinutes: 250 };
     const reminders = reminderTimes(settings, { from: at(0, 0, 6), to: at(3, 0, 6) }, SOMETHING_DUE);

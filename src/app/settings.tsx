@@ -14,9 +14,13 @@ import { colors, space } from '@/ui/theme';
 
 const MAX_RESULTS = 20;
 
+function cityLabel(city: City): string {
+  return `${city.name}، ${city.country}`;
+}
+
 function placeLabel(place: Place): string {
   const city = place.cityId === null ? undefined : getCity(place.cityId);
-  return city ? `${city.name}، ${city.country}` : t.coordinates(place.latitude, place.longitude);
+  return city ? cityLabel(city) : t.coordinates(place.latitude, place.longitude);
 }
 
 // Where and when Reminders fire: the place and calculation method that give
@@ -52,21 +56,30 @@ export default function SettingsScreen() {
     setQuery('');
   }
 
-  function applyCoordinates() {
+  function typedPlace(): Place | null {
     const latitude = parseCoordinate(latitudeText, 90);
     const longitude = parseCoordinate(longitudeText, 180);
-    if (latitude === null || longitude === null) return setError(t.coordinatesInvalid);
+    return latitude === null || longitude === null ? null : { cityId: null, latitude, longitude };
+  }
+
+  function applyCoordinates() {
+    const place = typedPlace();
+    if (place === null) return setError(t.coordinatesInvalid);
     setError(null);
-    update({ place: { cityId: null, latitude, longitude } });
+    update({ place });
     setTyping(false);
   }
 
+  // Coordinates still being typed are saved too, as if applied first.
   async function save() {
     if (settings === null) return;
+    const place = typing ? typedPlace() : settings.place;
+    if (place === null && typing) return setError(t.coordinatesInvalid);
     const delayMinutes = parseDelayMinutes(delayText);
     if (delayMinutes === null) return setError(t.delayInvalid);
     setError(null);
-    const saved = { ...settings, delayMinutes };
+    setTyping(false);
+    const saved = { ...settings, place, delayMinutes };
     await saveSettings(db, saved);
     setSettings(saved);
     const allowed = saved.place === null || (await requestReminderPermission());
@@ -90,7 +103,7 @@ export default function SettingsScreen() {
         {query.trim() !== '' && results.length === 0 && <Text style={styles.meta}>{t.noCityFound}</Text>}
         {results.map((city) => (
           <Pressable key={city.id} style={styles.choice} onPress={() => pickCity(city)}>
-            <Text>{`${city.name}، ${city.country}`}</Text>
+            <Text>{cityLabel(city)}</Text>
             <Text style={styles.meta}>{city.nameLatin}</Text>
           </Pressable>
         ))}
