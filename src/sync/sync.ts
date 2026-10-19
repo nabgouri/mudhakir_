@@ -5,7 +5,7 @@ import { replay, type Rating } from '@/engine/study';
 import { rescheduleReminders } from '@/reminders/schedule';
 
 import { client, supabase } from './client';
-import { lessonsAwaitingQuestions, notifyQuestionsReady, sendWaitingLessons } from './generation';
+import { lessonsAwaitingQuestions, notifyQuestionsReady, sendQueuedParts } from './generation';
 
 // Two-way sync between the phone's SQLite database and the student's
 // Supabase tables (supabase/migrations/). Each sync pushes the phone's
@@ -16,7 +16,7 @@ import { lessonsAwaitingQuestions, notifyQuestionsReady, sendWaitingLessons } fr
 //   `deleted_at`, so it syncs like any other.
 // - Reviews are append-only, so they never conflict. A Question's schedule
 //   is not synced: the phone rebuilds it from the Question's Reviews.
-// - Between pushing and pulling, Lessons waiting for Questions are sent for
+// - Between pushing and pulling, queued Lesson parts are sent for
 //   generation (./generation.ts); the pull then brings their new status,
 //   and later their Questions.
 
@@ -51,6 +51,7 @@ const TABLES: Table[] = [
       subject_id: 'value',
       number: 'value',
       interactive_review_url: 'value',
+      has_transcript: 'boolean',
       generation_status: 'value',
       part_count: 'value',
       parts_done: 'json',
@@ -374,7 +375,7 @@ async function sync(db: SQLiteDatabase): Promise<SyncResult> {
   for (const table of TABLES) await pushTable(db, owner, table);
   await pushReviews(db, owner);
   await pushSettings(db, owner);
-  await sendWaitingLessons(db);
+  await sendQueuedParts(db);
 
   const awaiting = await lessonsAwaitingQuestions(db);
   let changed = false;

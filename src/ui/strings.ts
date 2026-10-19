@@ -17,7 +17,7 @@ function counted(n: number, forms: { zero: string; one: string; two: string; few
 // Every piece of interface text, in Arabic. Terms follow GLOSSARY.md:
 // Subject = مادة, Lesson = درس, Question = سؤال, Review Session = جلسة مراجعة,
 // Source Passage = النص المصدر, Reminder = تذكير,
-// Interactive Review = المذاكرة التفاعلية.
+// Interactive Review = المذاكرة التفاعلية, Transcript = التفريغ.
 export const t = {
   subjects: 'المواد',
   noSubjects: 'لا توجد مواد بعد. أضف أول مادة لتبدأ.',
@@ -71,6 +71,20 @@ export const t = {
   waitingHint: 'يُرسَل الدرس عند اتصال الهاتف بالإنترنت، بعد تسجيل الدخول في الإعدادات.',
   generatingHint: 'تصل الأسئلة بعد بضع دقائق، ويصلك إشعار حين تجهز.',
   generationError: (error: string) => `السبب: ${error}`,
+  partsDone: (done: number, count: number) => `الأجزاء المكتملة: ${done} من ${count}`,
+  retryGeneration: 'أعد المحاولة',
+  retryQueued: 'ستُرسَل الأجزاء التي تعذّر توليدها مرة أخرى.',
+  reattachTitle: 'أعد إرفاق التفريغ',
+  reattachMessage: 'أُرسل نص التفريغ ولم يعد محفوظًا على الهاتف. اختر ملف PDF نفسه لإعادة إرسال الأجزاء التي تعذّر توليدها.',
+  chooseFile: 'اختر الملف',
+  differentTranscript: 'هذا الملف لا يطابق تفريغ هذا الدرس. اختر ملف التفريغ نفسه الذي أُرفق أول مرة.',
+
+  attachTranscript: 'أرفق التفريغ (PDF)',
+  readingTranscript: 'جارٍ قراءة التفريغ…',
+  removeTranscript: 'إزالة',
+  transcriptAttached: (name: string, characters: number) => `التفريغ: ${name}، عدد الأحرف: ${characters}`,
+  transcriptNoText: 'لم يُعثر على نص في هذا الملف، وقد يكون صورًا ممسوحة ضوئيًا. أرفق ملف PDF فيه نص.',
+  transcriptFailed: 'تعذّرت قراءة ملف PDF هذا.',
 
   noQuestions: 'لا توجد أسئلة في هذا الدرس بعد.',
   addQuestion: 'أضف سؤالًا',

@@ -56,6 +56,8 @@ export const GenerateRequest = z
     }
   });
 
+export type GenerateRequestInput = z.input<typeof GenerateRequest>;
+
 // Where a Question came from. A Question copied from the Interactive Review
 // has no Source Passage; one written from a Concept Card or the Transcript
 // keeps the passage it was drawn from, word for word.
@@ -113,6 +115,40 @@ export const GeneratedQuestions = z
     questions: z.array(GeneratedQuestion),
   })
   .strict();
+
+// Text compared for "word for word": the same letters and diacritics, in
+// NFC, with any run of spaces and line breaks counted as one space, since a
+// line break in the extracted PDF text is often just the end of a printed
+// line.
+function comparable(text: string): string {
+  return text.normalize('NFC').replace(/\s+/g, ' ').trim();
+}
+
+// What is wrong with `output` as the answer to `request`, beyond its shape:
+// it must be for the same Lesson and part, draw only on the material the
+// request carried, and quote each Transcript Source Passage word for word
+// from this part's text. The write script checks this before storing.
+export function problemsWithOutput(
+  request: z.output<typeof GenerateRequest>,
+  output: z.output<typeof GeneratedQuestions>,
+): string[] {
+  const problems: string[] = [];
+  if (output.lessonId !== request.lessonId) problems.push(`lessonId is not the request's (${request.lessonId})`);
+  if (output.partIndex !== request.partIndex) problems.push(`partIndex is not the request's (${request.partIndex})`);
+  const transcript = request.transcriptText === undefined ? null : comparable(request.transcriptText);
+  output.questions.forEach((question, i) => {
+    const where = `questions[${i}]`;
+    if (question.origin === 'transcript') {
+      if (transcript === null) problems.push(`${where} is from the Transcript, but this part has no Transcript text`);
+      else if (!transcript.includes(comparable(question.sourcePassage ?? ''))) {
+        problems.push(`${where}: the source passage is not word for word in this part's Transcript text`);
+      }
+    } else if (request.interactiveReviewUrl === undefined) {
+      problems.push(`${where} is from the Interactive Review (${question.origin}), but this part does not carry it`);
+    }
+  });
+  return problems;
+}
 
 // A Question as the `questions` table stores it, in the cloud and on the
 // phone (where `options` is the same JSON as text).

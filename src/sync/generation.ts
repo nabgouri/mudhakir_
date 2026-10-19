@@ -9,49 +9,78 @@ import { GenerateRequest } from '../../shared/generation';
 import { client } from './client';
 
 // The phone's side of question generation (docs/adr/0001). During a sync,
-// Lessons waiting to be sent go to the `generate-lesson` Edge Function,
-// which starts the routine; the routine writes the Questions to Supabase,
-// and a later sync brings them in with the Lesson's new status.
+// each queued part of a Lesson (`lesson_parts`, src/data/lessons.ts) goes to
+// the `generate-lesson` Edge Function, which starts the routine for it; the
+// routine writes the part's Questions to Supabase, and a later sync brings
+// them in with the Lesson's new status.
 //
 // The phone never writes a Lesson's status after `waiting`: the cloud sets
-// it, and the phone takes it on pull.
+// it, and the phone takes it on pull. A part's Transcript text leaves the
+// phone only in its request, and is deleted here once the cloud has the
+// part: it is never stored in Supabase or the backup.
 
 const CHANNEL_ID = 'questions-ready';
 export const QUESTIONS_READY_KIND = 'questions-ready';
 
-type WaitingLesson = {
-  id: string;
+type QueuedPart = {
+  lessonId: string;
+  partIndex: number;
+  transcriptText: string | null;
   subjectName: string;
   number: number;
-  interactiveReviewUrl: string;
+  interactiveReviewUrl: string | null;
+  partCount: number;
 };
 
-// Sends each waiting Lesson that the cloud already has (pushed and not
-// changed since). A Lesson that can't be sent stays waiting, and the next
-// sync tries again; one failure doesn't stop the others.
-export async function sendWaitingLessons(db: SQLiteDatabase): Promise<void> {
-  const lessons = await db.getAllAsync<WaitingLesson>(
-    `SELECT l.id, s.name AS subjectName, l.number, l.interactive_review_url AS interactiveReviewUrl
-     FROM lessons l JOIN subjects s ON s.id = l.subject_id AND s.deleted_at IS NULL
-     WHERE l.generation_status = 'waiting' AND l.deleted_at IS NULL AND l.interactive_review_url IS NOT NULL
-       AND l.synced_updated_at IS l.updated_at
-     ORDER BY l.created_at`,
+function httpStatus(error: unknown): number | undefined {
+  const context = (error as { context?: unknown }).context;
+  return context instanceof Response ? context.status : undefined;
+}
+
+// Sends each queued part of a Lesson the cloud already has (pushed and not
+// changed since). A part that can't be sent stays queued, and the next sync
+// tries again; one failure doesn't stop the others, except the routine's
+// hourly limit, which stops this sync's sending.
+export async function sendQueuedParts(db: SQLiteDatabase): Promise<void> {
+  await db.runAsync(
+    'DELETE FROM lesson_parts WHERE lesson_id IN (SELECT id FROM lessons WHERE deleted_at IS NOT NULL)',
   );
-  for (const lesson of lessons) {
+  const parts = await db.getAllAsync<QueuedPart>(
+    `SELECT p.lesson_id AS lessonId, p.part_index AS partIndex, p.transcript_text AS transcriptText,
+       s.name AS subjectName, l.number, l.interactive_review_url AS interactiveReviewUrl, l.part_count AS partCount
+     FROM lesson_parts p
+     JOIN lessons l ON l.id = p.lesson_id AND l.deleted_at IS NULL
+     JOIN subjects s ON s.id = l.subject_id AND s.deleted_at IS NULL
+     WHERE l.synced_updated_at IS l.updated_at
+     ORDER BY l.created_at, p.part_index`,
+  );
+  for (const part of parts) {
     const request = GenerateRequest.safeParse({
-      lessonId: lesson.id,
-      subjectName: lesson.subjectName,
-      lessonNumber: lesson.number,
-      interactiveReviewUrl: lesson.interactiveReviewUrl,
-      partIndex: 0,
-      partCount: 1,
+      lessonId: part.lessonId,
+      subjectName: part.subjectName,
+      lessonNumber: part.number,
+      // Only the first part reads the Interactive Review.
+      interactiveReviewUrl: part.partIndex === 0 ? (part.interactiveReviewUrl ?? undefined) : undefined,
+      transcriptText: part.transcriptText ?? undefined,
+      partIndex: part.partIndex,
+      partCount: part.partCount,
     });
     if (!request.success) {
-      console.warn('A waiting Lesson does not make a valid request', lesson.id, request.error);
+      console.warn('A queued part does not make a valid request', part.lessonId, part.partIndex, request.error);
       continue;
     }
     const { error } = await client().functions.invoke('generate-lesson', { body: request.data });
-    if (error) console.warn('Sending a Lesson for generation failed', lesson.id, error);
+    if (error) {
+      console.warn('Sending a part for generation failed', part.lessonId, part.partIndex, error);
+      if (httpStatus(error) === 429) return;
+      continue;
+    }
+    // Sent, already under way or already done: the cloud has it.
+    await db.runAsync(
+      'DELETE FROM lesson_parts WHERE lesson_id = ? AND part_index = ?',
+      part.lessonId,
+      part.partIndex,
+    );
   }
 }
 

@@ -67,6 +67,7 @@ export async function renameSubject(db: SQLiteDatabase, id: string, name: string
 export async function deleteSubject(db: SQLiteDatabase, id: string): Promise<void> {
   const now = Date.now();
   await writeTransaction(db, async (tx) => {
+    await tx.runAsync('DELETE FROM lesson_parts WHERE lesson_id IN (SELECT id FROM lessons WHERE subject_id = ?)', id);
     await tx.runAsync(
       `UPDATE questions SET deleted_at = ?, updated_at = MAX(?, updated_at + 1)
        WHERE deleted_at IS NULL AND lesson_id IN (SELECT id FROM lessons WHERE subject_id = ? AND deleted_at IS NULL)`,

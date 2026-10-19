@@ -1,8 +1,10 @@
 // The routine's write script (.claude/skills/generate-lesson-questions/).
-// It checks the routine's output against the shared contract and stores it
-// in Supabase, or records that the part failed.
+// It checks the routine's output against the shared contract and against
+// the request it answers (same Lesson and part, only that part's material,
+// Transcript Source Passages word for word), and stores it in Supabase, or
+// records that the part failed.
 //
-//   npx tsx routine/write-questions.ts <output.json>
+//   npx tsx routine/write-questions.ts <output.json> <request.json>
 //   npx tsx routine/write-questions.ts --fail <lessonId> <partIndex> <reason>
 //
 // Storing replaces the (lesson, part) pair's Questions and marks the part
@@ -19,7 +21,7 @@ import { readFileSync } from 'node:fs';
 
 import { z } from 'zod';
 
-import { GeneratedQuestions, toQuestionRecord } from '../shared/generation';
+import { GenerateRequest, GeneratedQuestions, problemsWithOutput, toQuestionRecord } from '../shared/generation';
 
 async function rpc(name: string, args: Record<string, unknown>): Promise<string> {
   const url = process.env.SUPABASE_URL;
@@ -47,23 +49,40 @@ async function fail(lessonId: string, partIndex: number, reason: string): Promis
   console.log(`Recorded part ${partIndex} of Lesson ${lessonId} as failed. The Lesson is now ${status}.`);
 }
 
-async function write(path: string): Promise<boolean> {
-  let raw: unknown;
+function readJson(path: string): unknown {
   try {
-    raw = JSON.parse(readFileSync(path, 'utf8'));
+    return JSON.parse(readFileSync(path, 'utf8'));
   } catch (error) {
     console.error(`Could not read ${path} as JSON: ${(error as Error).message}`);
-    return false;
+    return undefined;
   }
+}
 
-  const parsed = GeneratedQuestions.safeParse(raw);
-  if (!parsed.success) {
-    const problems = z.prettifyError(parsed.error);
-    console.error(`The output does not match GeneratedQuestions (shared/generation.ts):\n${problems}`);
-    // Record the failure when the file at least says which part it is.
+async function write(outputPath: string, requestPath: string): Promise<boolean> {
+  const raw = readJson(outputPath);
+  const rawRequest = readJson(requestPath);
+  if (raw === undefined || rawRequest === undefined) return false;
+
+  // Records the failure when the output at least says which part it is.
+  async function invalid(problems: string): Promise<false> {
+    console.error(problems);
     const target = z.object({ lessonId: z.uuid(), partIndex: z.number().int().min(0) }).safeParse(raw);
     if (target.success) await fail(target.data.lessonId, target.data.partIndex, `Invalid output:\n${problems}`);
     return false;
+  }
+
+  const request = GenerateRequest.safeParse(rawRequest);
+  if (!request.success) {
+    console.error(`${requestPath} is not the GenerateRequest from the payload:\n${z.prettifyError(request.error)}`);
+    return false;
+  }
+  const parsed = GeneratedQuestions.safeParse(raw);
+  if (!parsed.success) {
+    return invalid(`The output does not match GeneratedQuestions (shared/generation.ts):\n${z.prettifyError(parsed.error)}`);
+  }
+  const problems = problemsWithOutput(request.data, parsed.data);
+  if (problems.length > 0) {
+    return invalid(`The output does not answer the request:\n${problems.map((p) => `✖ ${p}`).join('\n')}`);
   }
 
   const { lessonId, partIndex, questions } = parsed.data;
@@ -86,9 +105,9 @@ async function main(args: string[]): Promise<boolean> {
     await fail(args[1], partIndex, args[3]);
     return true;
   }
-  if (args.length === 1 && !args[0].startsWith('--')) return write(args[0]);
+  if (args.length === 2 && !args.some((arg) => arg.startsWith('--'))) return write(args[0], args[1]);
   console.error(
-    'Usage:\n  npx tsx routine/write-questions.ts <output.json>\n  npx tsx routine/write-questions.ts --fail <lessonId> <partIndex> <reason>',
+    'Usage:\n  npx tsx routine/write-questions.ts <output.json> <request.json>\n  npx tsx routine/write-questions.ts --fail <lessonId> <partIndex> <reason>',
   );
   return false;
 }

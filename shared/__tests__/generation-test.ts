@@ -1,7 +1,16 @@
 import { questionFromRow } from '../../src/data/question-row';
-import { GenerateRequest, GeneratedQuestions, MAX_REQUEST_TEXT, toQuestionRecord } from '../generation';
+import {
+  GenerateRequest,
+  GeneratedQuestions,
+  MAX_REQUEST_TEXT,
+  problemsWithOutput,
+  toQuestionRecord,
+} from '../generation';
 import interactiveReviewOutput from './fixtures/interactive-review-output.json';
 import interactiveReviewRequest from './fixtures/interactive-review-request.json';
+import multiPartRequests from './fixtures/multi-part-requests.json';
+import transcriptOutput from './fixtures/transcript-output.json';
+import transcriptRequest from './fixtures/transcript-request.json';
 
 // The generation contract (seam 2). The Edge Function, the routine's write
 // script and the app all import this schema, so these fixtures check all
@@ -76,7 +85,75 @@ describe('GeneratedQuestions', () => {
   });
 });
 
+describe('GeneratedQuestions from a Transcript', () => {
+  test('a routine output from a Transcript part passes', () => {
+    const result = GeneratedQuestions.safeParse(transcriptOutput);
+    expect(result.error).toBeUndefined();
+    expect(result.data?.questions.every((q) => q.origin === 'transcript')).toBe(true);
+  });
+
+  test.each<[string, (question: Record<string, unknown>) => void]>([
+    ['without a source passage', (q) => delete q.sourcePassage],
+    ['with a blank source passage', (q) => (q.sourcePassage = ' \n ')],
+    ['with a null source passage', (q) => (q.sourcePassage = null)],
+  ])('rejects a Transcript Question %s', (_, edit) => {
+    const output = clone(transcriptOutput) as { questions: Record<string, unknown>[] };
+    edit(output.questions[1]);
+    expect(GeneratedQuestions.safeParse(output).success).toBe(false);
+  });
+});
+
+describe('an output checked against its request', () => {
+  const request = GenerateRequest.parse(transcriptRequest);
+  const problems = (output: unknown, forRequest = request) =>
+    problemsWithOutput(forRequest, GeneratedQuestions.parse(output));
+
+  test('Source Passages copied word for word from the part have no problems', () => {
+    expect(problems(transcriptOutput)).toEqual([]);
+  });
+
+  test('a passage that runs over a line break of the extracted text still counts as word for word', () => {
+    const output = clone(transcriptOutput);
+    // In the part, a line break follows "ونَجِسٌ»".
+    output.questions[0].sourcePassage = 'ونَجِسٌ». فالطَّهور: هو الباقي على خِلقته';
+    expect(problems(output)).toEqual([]);
+  });
+
+  test.each<[string, string]>([
+    ['reworded', 'الماء الطهور هو الباقي على أصل خلقته.'],
+    ['without its diacritics', 'فالطهور: هو الباقي على خلقته'],
+    ['with a word added', 'فالطَّهور: هو الباقي على خِلقته بإجماع العلماء'],
+    ['from another part', 'ولا يُكره الماءُ المتغيِّرُ بطول المُكث'],
+  ])('a Source Passage %s is a problem', (_, sourcePassage) => {
+    const output = clone(transcriptOutput);
+    output.questions[1].sourcePassage = sourcePassage;
+    expect(problems(output)).toEqual([expect.stringContaining('questions[1]')]);
+  });
+
+  test('Concept Card or Interactive Review Questions from a part that does not carry the Interactive Review are a problem', () => {
+    const output = clone(interactiveReviewOutput);
+    expect(problems(output)).toHaveLength(output.questions.length);
+  });
+
+  test('Transcript Questions from a part with no Transcript text are a problem', () => {
+    const output = clone(transcriptOutput);
+    expect(problems(output, GenerateRequest.parse(interactiveReviewRequest))).toHaveLength(output.questions.length);
+  });
+
+  test('an output for another part is a problem', () => {
+    expect(problems({ ...clone(transcriptOutput), partIndex: 1 })).toEqual([expect.stringContaining('partIndex')]);
+  });
+});
+
 describe('GenerateRequest', () => {
+  test('a Transcript-only request passes', () => {
+    expect(GenerateRequest.safeParse(transcriptRequest).error).toBeUndefined();
+  });
+
+  test('every part of a multi-part request passes', () => {
+    for (const part of multiPartRequests) expect(GenerateRequest.safeParse(part).error).toBeUndefined();
+  });
+
   test('an Interactive-Review-only request passes', () => {
     expect(GenerateRequest.safeParse(interactiveReviewRequest).error).toBeUndefined();
   });

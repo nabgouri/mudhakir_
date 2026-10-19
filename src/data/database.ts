@@ -136,6 +136,25 @@ const MIGRATIONS: string[] = [
   ALTER TABLE lessons ADD COLUMN error TEXT;
   ALTER TABLE questions ADD COLUMN part_index INTEGER;
   `,
+  // Transcripts (src/data/lessons.ts). `lesson_parts` holds each part of a
+  // Lesson still to be sent for generation, with its share of the
+  // Transcript's text; a part's row is deleted once the cloud has it, so the
+  // text stays on the phone only until it is sent. It is never synced.
+  // `has_transcript` (synced) says the Lesson's parts carry Transcript text,
+  // so a retry knows to ask for the PDF again. Lessons already waiting get
+  // their one part queued.
+  `
+  CREATE TABLE lesson_parts (
+    lesson_id TEXT NOT NULL REFERENCES lessons (id),
+    part_index INTEGER NOT NULL,
+    transcript_text TEXT,
+    PRIMARY KEY (lesson_id, part_index)
+  );
+  ALTER TABLE lessons ADD COLUMN has_transcript INTEGER NOT NULL DEFAULT 0;
+  INSERT INTO lesson_parts (lesson_id, part_index)
+    SELECT id, 0 FROM lessons
+    WHERE generation_status = 'waiting' AND interactive_review_url IS NOT NULL AND deleted_at IS NULL;
+  `,
 ];
 
 export async function migrate(db: SQLiteDatabase): Promise<void> {

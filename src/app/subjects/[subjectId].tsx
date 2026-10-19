@@ -9,6 +9,7 @@ import { listStudyQuestions } from '@/data/questions';
 import { getSubject } from '@/data/subjects';
 import { due } from '@/engine/study';
 import { requestReminderPermission } from '@/reminders/schedule';
+import { useTranscriptPicker } from '@/transcript/extract';
 import { Button, Text, TextInput } from '@/ui/components';
 import { t } from '@/ui/strings';
 import { colors, space } from '@/ui/theme';
@@ -30,20 +31,39 @@ export default function SubjectLessonsScreen() {
   const [reviewUrlText, setReviewUrlText] = useState('');
   const reviewUrlInput = useRef<TextInputInstance>(null);
   const [error, setError] = useState<string | null>(null);
+  // The attached Transcript's text, held only until the Lesson is added.
+  const [transcript, setTranscript] = useState<{ name: string; text: string } | null>(null);
+  const { pickTranscript, extractor, reading } = useTranscriptPicker();
+
+  async function attachTranscript() {
+    const picked = await pickTranscript();
+    if (picked.status === 'canceled') return;
+    if (picked.status === 'picked') {
+      setTranscript({ name: picked.name, text: picked.text });
+      setError(null);
+    } else {
+      if (picked.status === 'failed') console.warn('Reading a Transcript failed', picked.error);
+      setError(picked.status === 'no-text' ? t.transcriptNoText : t.transcriptFailed);
+    }
+  }
 
   async function add() {
     const number = parseLessonNumber(numberText);
     if (number === null) return setError(t.lessonNumberInvalid);
     const reviewUrl = parseInteractiveReviewUrl(reviewUrlText);
     if (reviewUrl === null) return setError(t.interactiveReviewUrlInvalid);
-    const result = await addLesson(db, subjectId, number, reviewUrl);
+    const result = await addLesson(db, subjectId, number, {
+      interactiveReviewUrl: reviewUrl,
+      transcriptText: transcript?.text,
+    });
     if (!result.ok) return setError(t.lessonNumberTaken);
     setNumberText('');
     setReviewUrlText('');
+    setTranscript(null);
     setError(null);
     await reload();
     // So the "Questions ready" notification can show.
-    if (reviewUrl !== undefined) requestReminderPermission().catch(() => {});
+    if (reviewUrl !== undefined || transcript !== null) requestReminderPermission().catch(() => {});
   }
 
   function confirmDelete(lesson: Lesson) {
@@ -95,7 +115,7 @@ export default function SubjectLessonsScreen() {
                 returnKeyType="next"
                 onSubmitEditing={() => reviewUrlInput.current?.focus()}
               />
-              <Button title={t.addLesson} onPress={add} />
+              <Button title={t.addLesson} onPress={add} disabled={reading} />
             </View>
             <TextInput
               ref={reviewUrlInput}
@@ -109,6 +129,27 @@ export default function SubjectLessonsScreen() {
               onSubmitEditing={add}
               style={styles.urlInput}
             />
+            {transcript === null ? (
+              <Button
+                title={reading ? t.readingTranscript : t.attachTranscript}
+                variant="plain"
+                onPress={attachTranscript}
+                disabled={reading}
+              />
+            ) : (
+              <View style={styles.card}>
+                <View style={styles.row}>
+                  <Text style={[styles.meta, styles.spacer]}>
+                    {t.transcriptAttached(transcript.name, transcript.text.length)}
+                  </Text>
+                  <Button title={t.removeTranscript} variant="plain" onPress={() => setTranscript(null)} />
+                </View>
+                {/* The opening lines, so a PDF whose text comes out garbled is noticed before it is sent. */}
+                <Text style={styles.preview} numberOfLines={3}>
+                  {transcript.text.slice(0, 300)}
+                </Text>
+              </View>
+            )}
             {error !== null && <Text style={styles.error}>{error}</Text>}
           </View>
         }
@@ -129,6 +170,7 @@ export default function SubjectLessonsScreen() {
           </View>
         )}
       />
+      {extractor}
     </>
   );
 }
@@ -168,6 +210,11 @@ const styles = StyleSheet.create({
   },
   urlInput: {
     flex: 0,
+  },
+  preview: {
+    fontSize: 15,
+    lineHeight: 26,
+    color: colors.textSecondary,
   },
   error: {
     color: colors.danger,

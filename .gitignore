@@ -45,3 +45,6 @@ example
 # Supabase CLI
 supabase/.temp/
 supabase/.branches/
+
+# pdf.js copied for the Transcript extractor (scripts/copy-pdfjs.js)
+/assets/pdfjs/

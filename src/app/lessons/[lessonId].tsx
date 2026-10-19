@@ -1,11 +1,13 @@
 import { Link, Stack, useLocalSearchParams } from 'expo-router';
-import { useCallback } from 'react';
-import { FlatList, StyleSheet, View } from 'react-native';
+import { useCallback, useState } from 'react';
+import { Alert, FlatList, StyleSheet, View } from 'react-native';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import { getLesson } from '@/data/lessons';
+import { getLesson, partsToRetry, queueRetry } from '@/data/lessons';
 import { deleteQuestion, listLessonQuestions, type Question } from '@/data/questions';
 import { Button, Text } from '@/ui/components';
+import { syncNow } from '@/sync/sync';
+import { useTranscriptPicker } from '@/transcript/extract';
 import { confirmDeleteQuestion } from '@/ui/confirm';
 import { t } from '@/ui/strings';
 import { colors, space } from '@/ui/theme';
@@ -22,6 +24,34 @@ export default function LessonQuestionsScreen() {
     [lessonId],
   );
   const { db, data, reload } = useDbQuery(load);
+  const { pickTranscript, extractor, reading } = useTranscriptPicker();
+  const [retryMessage, setRetryMessage] = useState<string | null>(null);
+
+  // Queues the failed parts again and syncs, which sends them. When their
+  // Transcript text has already been sent, the student re-attaches the PDF.
+  async function retry(transcriptText?: string) {
+    const result = await queueRetry(db, lessonId, transcriptText);
+    if (result.status === 'needs-transcript') {
+      Alert.alert(t.reattachTitle, t.reattachMessage, [
+        { text: t.cancel, style: 'cancel' },
+        { text: t.chooseFile, onPress: reattach },
+      ]);
+      return;
+    }
+    if (result.status === 'different-transcript') return setRetryMessage(t.differentTranscript);
+    setRetryMessage(result.status === 'queued' ? t.retryQueued : null);
+    await reload();
+    await syncNow(db);
+    await reload();
+  }
+
+  async function reattach() {
+    const picked = await pickTranscript();
+    if (picked.status === 'canceled') return;
+    if (picked.status === 'picked') return retry(picked.text);
+    if (picked.status === 'failed') console.warn('Reading a Transcript failed', picked.error);
+    setRetryMessage(picked.status === 'no-text' ? t.transcriptNoText : t.transcriptFailed);
+  }
 
   function confirmDelete(question: Question) {
     confirmDeleteQuestion(async () => {
@@ -59,6 +89,19 @@ export default function LessonQuestionsScreen() {
                 {lesson.generationStatus === 'failed' && lesson.generationError !== null && (
                   <Text style={styles.meta}>{t.generationError(lesson.generationError)}</Text>
                 )}
+                {lesson.partCount > 1 && lesson.generationStatus !== 'ready' && (
+                  <Text style={styles.meta}>{t.partsDone(lesson.partsDone.length, lesson.partCount)}</Text>
+                )}
+                {partsToRetry(lesson).length > 0 && (
+                  <View style={styles.actions}>
+                    <Button
+                      title={reading ? t.readingTranscript : t.retryGeneration}
+                      onPress={() => retry()}
+                      disabled={reading}
+                    />
+                  </View>
+                )}
+                {retryMessage !== null && <Text style={styles.meta}>{retryMessage}</Text>}
               </View>
             )}
             <View style={styles.header}>
@@ -92,6 +135,7 @@ export default function LessonQuestionsScreen() {
           </View>
         )}
       />
+      {extractor}
     </>
   );
 }
