@@ -2,8 +2,10 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 export const DATABASE_NAME = 'mudhakir.db';
 
-// Rows are never removed: `deleted_at` marks a deletion so the sync ticket
-// can send it to the cloud. `updated_at` lets the last write win on sync.
+// Rows are never removed: `deleted_at` marks a deletion so sync can send it
+// to the cloud. `updated_at` lets the last write win on sync; a change sets
+// it to now, or one past its old value if the phone's clock is behind the
+// version it pulled, so the change still counts as the last write.
 // Times are milliseconds since the epoch.
 const MIGRATIONS: string[] = [
   `
@@ -85,10 +87,46 @@ const MIGRATIONS: string[] = [
     CAST(strftime('%s', 'now') AS INTEGER) * 1000
   );
   `,
+  // Cloud sync (src/sync/). `synced_updated_at` is the `updated_at` last
+  // sent to or received from the cloud, so a row needs pushing while the two
+  // differ. A Review needs pushing until `synced`, the one column of a
+  // Review that may change. `sync_state` holds how far each table has been
+  // pulled.
+  //
+  // Subject names and Lesson numbers may now repeat: sync can bring in a
+  // Subject or Lesson made on another phone, and both are kept rather than
+  // one lost. The app still checks its own writes for repeats.
+  //
+  // Settings the student never saved get time 0, so on a fresh install the
+  // backed-up settings win over the defaults.
+  `
+  DROP INDEX subjects_live_name;
+  DROP INDEX lessons_live_number;
+  CREATE INDEX lessons_subject ON lessons (subject_id);
+
+  ALTER TABLE subjects ADD COLUMN synced_updated_at INTEGER;
+  ALTER TABLE lessons ADD COLUMN synced_updated_at INTEGER;
+  ALTER TABLE questions ADD COLUMN synced_updated_at INTEGER;
+  ALTER TABLE settings ADD COLUMN synced_updated_at INTEGER;
+  ALTER TABLE reviews ADD COLUMN synced INTEGER NOT NULL DEFAULT 0;
+
+  DROP TRIGGER reviews_no_update;
+  CREATE TRIGGER reviews_no_update BEFORE UPDATE OF id, question_id, rating, reviewed_at ON reviews
+  BEGIN SELECT RAISE(ABORT, 'reviews are append-only'); END;
+
+  UPDATE settings SET updated_at = 0 WHERE latitude IS NULL;
+
+  CREATE TABLE sync_state (
+    key TEXT PRIMARY KEY NOT NULL,
+    value TEXT NOT NULL
+  );
+  `,
 ];
 
 export async function migrate(db: SQLiteDatabase): Promise<void> {
-  await db.execAsync('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
+  // Sync writes in its own transactions, so a write that meets one waits
+  // for it instead of failing.
+  await db.execAsync('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;');
   const row = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
   const version = row?.user_version ?? 0;
   for (let next = version; next < MIGRATIONS.length; next++) {
@@ -99,16 +137,34 @@ export async function migrate(db: SQLiteDatabase): Promise<void> {
   }
 }
 
+// A transaction on its own connection, so other queries can't slip into it.
+// It waits for another writer (sync, or the background task) rather than
+// failing. BEGIN only takes the write lock at the first write, so a write
+// that changes nothing takes it at once, before any read could go stale.
+export async function writeTransaction(
+  db: SQLiteDatabase,
+  task: (tx: SQLiteDatabase) => Promise<void>,
+): Promise<void> {
+  await db.withExclusiveTransactionAsync(async (tx) => {
+    await tx.execAsync('PRAGMA busy_timeout = 5000');
+    await tx.execAsync('UPDATE settings SET id = id WHERE 0');
+    await task(tx);
+  });
+}
+
 export type SaveResult = { ok: true } | { ok: false; reason: 'duplicate' };
 
-// Runs a write that a unique index may refuse (a Subject name or Lesson
-// number already in use) and reports that refusal instead of throwing.
-export async function saveUnique(write: () => Promise<unknown>): Promise<SaveResult> {
-  try {
-    await write();
-    return { ok: true };
-  } catch (error) {
-    if (String(error).includes('UNIQUE constraint failed')) return { ok: false, reason: 'duplicate' };
-    throw error;
-  }
+// Runs a write unless `taken` finds the Subject name or Lesson number
+// already in use, checking and writing in one transaction.
+export async function saveIfUnique(
+  db: SQLiteDatabase,
+  taken: (tx: SQLiteDatabase) => Promise<boolean>,
+  write: (tx: SQLiteDatabase) => Promise<unknown>,
+): Promise<SaveResult> {
+  let result: SaveResult = { ok: true };
+  await writeTransaction(db, async (tx) => {
+    if (await taken(tx)) result = { ok: false, reason: 'duplicate' };
+    else await write(tx);
+  });
+  return result;
 }

@@ -3,6 +3,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { rate, type QuestionState, type Rating, type StudyQuestion } from '@/engine/study';
 
+import { writeTransaction } from './database';
 import type { QuestionContent } from './input';
 
 export type Question = QuestionContent & {
@@ -98,7 +99,7 @@ export async function addQuestion(db: SQLiteDatabase, lessonId: string, content:
 export async function updateQuestion(db: SQLiteDatabase, id: string, content: QuestionContent): Promise<void> {
   const { options, correctOption, answer } = contentColumns(content);
   await db.runAsync(
-    `UPDATE questions SET kind = ?, prompt = ?, options = ?, correct_option = ?, answer = ?, edited = 1, updated_at = ?
+    `UPDATE questions SET kind = ?, prompt = ?, options = ?, correct_option = ?, answer = ?, edited = 1, updated_at = MAX(?, updated_at + 1)
      WHERE id = ? AND deleted_at IS NULL`,
     content.kind,
     content.prompt,
@@ -113,7 +114,7 @@ export async function updateQuestion(db: SQLiteDatabase, id: string, content: Qu
 export async function deleteQuestion(db: SQLiteDatabase, id: string): Promise<void> {
   const now = Date.now();
   await db.runAsync(
-    'UPDATE questions SET deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL',
+    'UPDATE questions SET deleted_at = ?, updated_at = MAX(?, updated_at + 1) WHERE id = ? AND deleted_at IS NULL',
     now,
     now,
     id,
@@ -136,7 +137,7 @@ export async function listStudyQuestions(db: SQLiteDatabase): Promise<StudyQuest
 // Appends the Review and stores the Question's new schedule, together. The
 // schedule is derived from the Reviews, so it does not change `updated_at`.
 export async function recordReview(db: SQLiteDatabase, questionId: string, rating: Rating, now: Date): Promise<void> {
-  await db.withExclusiveTransactionAsync(async (tx) => {
+  await writeTransaction(db, async (tx) => {
     const row = await tx.getFirstAsync<{ schedule: string | null }>(
       'SELECT schedule FROM questions WHERE id = ? AND deleted_at IS NULL',
       questionId,

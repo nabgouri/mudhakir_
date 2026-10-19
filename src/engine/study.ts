@@ -107,6 +107,16 @@ export function rate(state: QuestionState | null, rating: Rating, now: Date): Qu
   };
 }
 
+export type PastReview = { rating: Rating; reviewedAt: number };
+
+// A Question's state rebuilt from all its Reviews, in the order they were
+// made: what the phone stores after its Reviews arrive from the backup.
+export function replay(reviews: PastReview[]): QuestionState | null {
+  return [...reviews]
+    .sort((a, b) => a.reviewedAt - b.reviewedAt)
+    .reduce<QuestionState | null>((state, review) => rate(state, review.rating, new Date(review.reviewedAt)), null);
+}
+
 // A Multiple-Choice answer is rated for the student.
 export function ratingForChoice(correct: boolean): Rating {
   return correct ? 'good' : 'again';

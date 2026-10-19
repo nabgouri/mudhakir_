@@ -10,6 +10,7 @@ import { AppState } from 'react-native';
 import { DATABASE_NAME, migrate } from '@/data/database';
 import { registerBackgroundReschedule } from '@/reminders/background';
 import { REMINDER_URL, rescheduleReminders } from '@/reminders/schedule';
+import { Sync } from '@/sync/triggers';
 import { colors, fonts } from '@/ui/theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -73,9 +74,10 @@ export default function RootLayout() {
   if (!ready) return null;
 
   return (
-    <SQLiteProvider databaseName={DATABASE_NAME} onInit={migrate}>
+    <SQLiteProvider databaseName={DATABASE_NAME} onInit={migrate} options={{ enableChangeListener: true }}>
       <StatusBar style="light" />
       <Reminders />
+      <Sync />
       <Stack
         screenOptions={{
           headerStyle: { backgroundColor: colors.primary },

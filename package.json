@@ -4,6 +4,7 @@
   "main": "expo-router/entry",
   "dependencies": {
     "@expo-google-fonts/noto-naskh-arabic": "^0.4.5",
+    "@supabase/supabase-js": "~2.117.2",
     "adhan": "^4.4.6",
     "expo": "~58.0.14",
     "expo-background-task": "~58.0.11",
@@ -13,6 +14,7 @@
     "expo-font": "~58.0.8",
     "expo-linking": "~58.0.13",
     "expo-localization": "~58.0.4",
+    "expo-network": "~58.0.3",
     "expo-notifications": "~58.1.5",
     "expo-router": "~58.0.23",
     "expo-splash-screen": "~58.0.10",
@@ -20,6 +22,7 @@
     "expo-status-bar": "~58.0.3",
     "expo-system-ui": "~58.0.6",
     "expo-task-manager": "~58.0.12",
+    "expo-web-browser": "~58.0.6",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-native": "0.88.0",

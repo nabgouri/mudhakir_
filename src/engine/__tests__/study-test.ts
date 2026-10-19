@@ -1,4 +1,4 @@
-import { due, dueCountsBySubject, nextSession, rate, ratingForChoice, type QuestionState, type Rating, type StudyQuestion } from '../study';
+import { due, dueCountsBySubject, nextSession, rate, ratingForChoice, replay, type QuestionState, type Rating, type StudyQuestion } from '../study';
 
 // A fixed clock on one day. Prayer times are those of a typical day; the
 // engine only sees the times.
@@ -69,6 +69,19 @@ test.each([
   [true, 'good'],
 ])('a multiple-choice answer that is right=%s counts as %s', (correct, rating) => {
   expect(ratingForChoice(correct)).toBe(rating);
+});
+
+describe('replay', () => {
+  test('a Question with no Reviews is new', () => {
+    expect(replay([])).toBeNull();
+  });
+
+  test('replaying the Reviews from a backup, in any order, gives the schedule the phone had', () => {
+    const ratings: Rating[] = ['again', 'good', 'hard', 'good', 'easy'];
+    const states = reviewSeries(ratings, at(6));
+    const reviews = ratings.map((rating, i) => ({ rating, reviewedAt: i === 0 ? at(6).getTime() : states[i - 1].due }));
+    expect(replay([...reviews].reverse())).toEqual(states.at(-1));
+  });
 });
 
 describe('due', () => {
