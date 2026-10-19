@@ -1,8 +1,8 @@
+import { MAX_LESSON_NUMBER } from '@/data/input';
+
 // Every piece of interface text, in Arabic. Terms follow GLOSSARY.md:
 // Subject = مادة, Lesson = درس.
 export const t = {
-  appName: 'مُذاكر',
-
   subjects: 'المواد',
   noSubjects: 'لا توجد مواد بعد. أضف أول مادة لتبدأ.',
   newSubjectPlaceholder: 'اسم المادة الجديدة',
@@ -13,8 +13,15 @@ export const t = {
   delete: 'حذف',
   subjectNameRequired: 'اكتب اسم المادة.',
   subjectNameTaken: 'توجد مادة بهذا الاسم.',
-  lessonCount: (n: number) =>
-    n === 0 ? 'لا دروس' : n === 1 ? 'درس واحد' : n === 2 ? 'درسان' : n <= 10 ? `${n} دروس` : `${n} درسًا`,
+  lessonCount: (n: number) => {
+    if (n === 0) return 'لا دروس';
+    if (n === 1) return 'درس واحد';
+    if (n === 2) return 'درسان';
+    const lastTwo = n % 100;
+    if (lastTwo >= 3 && lastTwo <= 10) return `${n} دروس`;
+    if (lastTwo >= 11) return `${n} درسًا`;
+    return `${n} درس`;
+  },
   deleteSubjectTitle: 'حذف المادة',
   deleteSubjectMessage: (name: string) => `هل تريد حذف مادة «${name}» وكل دروسها؟`,
 
@@ -23,7 +30,7 @@ export const t = {
   lessonNumberPlaceholder: 'رقم الدرس',
   addLesson: 'أضف درسًا',
   lesson: (n: number) => `الدرس ${n}`,
-  lessonNumberInvalid: 'اكتب رقم الدرس، عددًا صحيحًا من 1 فما فوق.',
+  lessonNumberInvalid: `اكتب رقم الدرس، عددًا صحيحًا من 1 إلى ${MAX_LESSON_NUMBER}.`,
   lessonNumberTaken: 'يوجد درس بهذا الرقم في هذه المادة.',
   deleteLessonTitle: 'حذف الدرس',
   deleteLessonMessage: (n: number) => `هل تريد حذف الدرس ${n}؟`,

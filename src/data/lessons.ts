@@ -1,7 +1,7 @@
 import { randomUUID } from 'expo-crypto';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import type { SaveResult } from './subjects';
+import { saveUnique, type SaveResult } from './database';
 
 export type Lesson = {
   id: string;
@@ -20,22 +20,17 @@ export async function listLessons(db: SQLiteDatabase, subjectId: string): Promis
 }
 
 export async function addLesson(db: SQLiteDatabase, subjectId: string, number: number): Promise<SaveResult> {
-  const existing = await db.getFirstAsync(
-    'SELECT 1 FROM lessons WHERE subject_id = ? AND number = ? AND deleted_at IS NULL',
-    subjectId,
-    number,
-  );
-  if (existing !== null) return { ok: false, reason: 'duplicate' };
   const now = Date.now();
-  await db.runAsync(
-    'INSERT INTO lessons (id, subject_id, number, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
-    randomUUID(),
-    subjectId,
-    number,
-    now,
-    now,
+  return saveUnique(() =>
+    db.runAsync(
+      'INSERT INTO lessons (id, subject_id, number, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+      randomUUID(),
+      subjectId,
+      number,
+      now,
+      now,
+    ),
   );
-  return { ok: true };
 }
 
 export async function deleteLesson(db: SQLiteDatabase, id: string): Promise<void> {

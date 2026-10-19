@@ -8,9 +8,18 @@ describe('parseSubjectName', () => {
     ['الفِقْهُ المُيَسَّر', 'الفِقْهُ المُيَسَّر'],
     ['', null],
     ['   ', null],
+    ['\u200F', null],
+    ['\u200C \u200B', null],
+    ['\u200Fالسيرة', 'السيرة'],
   ])('%j → %j', (raw, expected) => {
     expect(parseSubjectName(raw)).toBe(expected);
   });
+});
+
+test('the same name typed with its diacritics in a different order is one name', () => {
+  const shaddaThenKasra = 'فق\u0651\u0650ه';
+  const kasraThenShadda = 'فق\u0650\u0651ه';
+  expect(parseSubjectName(shaddaThenKasra)).toBe(parseSubjectName(kasraThenShadda));
 });
 
 describe('parseLessonNumber', () => {
@@ -25,6 +34,7 @@ describe('parseLessonNumber', () => {
     ['2.5', null],
     ['ثلاثة', null],
     ['', null],
+    ['9999', 9999],
     ['10000', null],
   ])('%j → %j', (raw, expected) => {
     expect(parseLessonNumber(raw)).toBe(expected);

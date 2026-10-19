@@ -39,3 +39,17 @@ export async function migrate(db: SQLiteDatabase): Promise<void> {
     });
   }
 }
+
+export type SaveResult = { ok: true } | { ok: false; reason: 'duplicate' };
+
+// Runs a write that a unique index may refuse (a Subject name or Lesson
+// number already in use) and reports that refusal instead of throwing.
+export async function saveUnique(write: () => Promise<unknown>): Promise<SaveResult> {
+  try {
+    await write();
+    return { ok: true };
+  } catch (error) {
+    if (String(error).includes('UNIQUE constraint failed')) return { ok: false, reason: 'duplicate' };
+    throw error;
+  }
+}
