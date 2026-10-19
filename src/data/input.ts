@@ -91,6 +91,6 @@ export function parseCoordinate(raw: string, limit: 90 | 180): number | null {
 export function parseInteractiveReviewUrl(raw: string): string | undefined | null {
   const text = raw.replace(INVISIBLE_MARKS, '').trim();
   if (text === '') return undefined;
-  const url = /^[a-z][a-z0-9+.-]*:/i.test(text) ? text : `https://${text}`;
+  const url = /^[a-z][a-z0-9+.-]*:\/\//i.test(text) ? text : `https://${text}`;
   return InteractiveReviewUrl.safeParse(url).success ? url : null;
 }

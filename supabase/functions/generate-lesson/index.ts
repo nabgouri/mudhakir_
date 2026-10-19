@@ -1,17 +1,20 @@
 // Starts question generation for one part of a Lesson (docs/adr/0001).
 //
 // The phone calls this with the student's Supabase session and a
-// `GenerateRequest`. The function checks both, fires the Claude Code routine
-// with the serialized request as the fire `text`, and records the part as
-// sent, which sets the Lesson to `generating`. The routine then writes the
-// Questions to Supabase itself (routine/write-questions.ts).
+// `GenerateRequest`. The function checks both, records the part as sent,
+// which sets the Lesson to `generating`, and fires the Claude Code routine
+// with the serialized request as the fire `text`. The routine then writes
+// the Questions to Supabase itself (routine/write-questions.ts).
 //
-// The routine is fired before the Lesson is marked, so a fire that fails
-// leaves the Lesson `waiting` and the phone sends it again on its next sync.
+// A part already sent or done is not fired again, so a phone that sends
+// twice (its pull failed) starts one run. A fire that fails takes the part
+// back to not sent, and the phone sends it again on a later sync.
 //
 // Secrets (Edge Function secrets, never in the app or the repo):
-//   ROUTINE_ID     the routine's id (trig_…)
-//   ROUTINE_TOKEN  the routine's API trigger token (sk-ant-oat01-…)
+//   ROUTINE_ID       the routine's id (trig_…)
+//   ROUTINE_TOKEN    the routine's API trigger token (sk-ant-oat01-…)
+//   STUDENT_USER_ID  the student's Supabase user id: the routine runs on
+//                    their subscription, so no other account may start it
 // SUPABASE_URL and SUPABASE_ANON_KEY are provided by Supabase.
 
 import { createClient } from '@supabase/supabase-js';
@@ -59,6 +62,7 @@ Deno.serve(async (req) => {
   });
   const { data: user, error: userError } = await supabase.auth.getUser(token);
   if (userError || !user.user) return reply(401, { error: 'Sign in first' });
+  if (user.user.id !== env('STUDENT_USER_ID')) return reply(403, { error: 'Not the student' });
 
   let body: unknown;
   try {
@@ -70,29 +74,25 @@ Deno.serve(async (req) => {
   if (!parsed.success) return reply(400, { error: z.prettifyError(parsed.error) });
   const request = parsed.data;
 
-  const { data: lesson, error: lessonError } = await supabase
-    .from('lessons')
-    .select('parts_done')
-    .eq('id', request.lessonId)
-    .is('deleted_at', null)
-    .maybeSingle();
-  if (lessonError) return reply(500, { error: lessonError.message });
-  if (lesson === null) return reply(404, { error: 'No such Lesson' });
-  if ((lesson.parts_done as number[]).includes(request.partIndex)) return reply(200, { status: 'already-done' });
-
-  const fired = await fireRoutine(request);
-  if (!fired.ok) {
-    console.error('Firing the routine failed', fired.status, fired.detail);
-    // 429: an hourly fire limit; the phone tries again on a later sync.
-    return reply(fired.status === 429 ? 429 : 502, { error: 'The routine could not be started' });
-  }
-
-  const { data: status, error: sentError } = await supabase.rpc('lesson_part_sent', {
+  const { data: start, error: startError } = await supabase.rpc('start_lesson_part', {
     p_lesson_id: request.lessonId,
     p_part_index: request.partIndex,
     p_part_count: request.partCount,
   });
-  // The routine is running and will set the Lesson's status when it writes.
-  if (sentError) console.error('Recording the part as sent failed', sentError);
-  return reply(200, { status: status ?? 'generating' });
+  if (startError) return reply(500, { error: startError.message });
+  if (start === null) return reply(404, { error: 'No such Lesson' });
+  if (start !== 'fire') return reply(200, { status: start === 'done' ? 'already-done' : 'already-sent' });
+
+  const fired = await fireRoutine(request).catch((error: Error) => ({ ok: false as const, status: 0, detail: error.message }));
+  if (!fired.ok) {
+    console.error('Firing the routine failed', fired.status, fired.detail);
+    const { error: unstartError } = await supabase.rpc('unstart_lesson_part', {
+      p_lesson_id: request.lessonId,
+      p_part_index: request.partIndex,
+    });
+    if (unstartError) console.error('Taking the part back to not sent failed', unstartError);
+    // 429: an hourly fire limit; the phone tries again on a later sync.
+    return reply(fired.status === 429 ? 429 : 502, { error: 'The routine could not be started' });
+  }
+  return reply(200, { status: 'generating' });
 });

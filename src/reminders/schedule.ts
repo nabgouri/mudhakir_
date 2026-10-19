@@ -27,7 +27,8 @@ async function ensureChannel() {
 }
 
 // Asks for the notification permission when it is not yet granted. Android
-// stops showing the prompt after the student refuses it twice.
+// stops showing the prompt after the student refuses it twice. The one
+// permission covers Reminders and the "Questions ready" notification.
 export async function requestReminderPermission(): Promise<boolean> {
   await ensureChannel();
   const current = await Notifications.getPermissionsAsync();

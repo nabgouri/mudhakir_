@@ -8,7 +8,7 @@ import { addLesson, deleteLesson, listLessons, type Lesson } from '@/data/lesson
 import { listStudyQuestions } from '@/data/questions';
 import { getSubject } from '@/data/subjects';
 import { due } from '@/engine/study';
-import { requestQuestionsReadyPermission } from '@/sync/generation';
+import { requestReminderPermission } from '@/reminders/schedule';
 import { Button, Text, TextInput } from '@/ui/components';
 import { t } from '@/ui/strings';
 import { colors, space } from '@/ui/theme';
@@ -43,7 +43,7 @@ export default function SubjectLessonsScreen() {
     setError(null);
     await reload();
     // So the "Questions ready" notification can show.
-    if (reviewUrl !== undefined) requestQuestionsReadyPermission().catch(() => {});
+    if (reviewUrl !== undefined) requestReminderPermission().catch(() => {});
   }
 
   function confirmDelete(lesson: Lesson) {

@@ -48,6 +48,7 @@ describe('parseInteractiveReviewUrl', () => {
     ['\u200Fhttps://review.example.org/?lesson=3', 'https://review.example.org/?lesson=3'],
     ['review.example.org/fiqh/3', 'https://review.example.org/fiqh/3'],
     ['http://review.example.org', 'http://review.example.org'],
+    ['review.example.org:8080/fiqh/3', 'https://review.example.org:8080/fiqh/3'],
     ['', undefined],
     ['   ', undefined],
     ['المذاكرة', null],

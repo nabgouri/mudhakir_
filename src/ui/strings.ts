@@ -168,5 +168,5 @@ export const t = {
   questionsReadyChannel: 'جاهزية الأسئلة',
   questionsReadyTitle: 'الأسئلة جاهزة',
   questionsReadyBody: (subjectName: string, n: number, count: number) =>
-    `${subjectName}: الدرس ${n}، ${t.questionCount(count)}.`,
+    `${t.lessonTitle(subjectName, n)}، ${t.questionCount(count)}.`,
 } as const;

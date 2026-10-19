@@ -36,7 +36,7 @@ A prompt about one point of a Lesson, drawn only from that Lesson's Ma'had Mater
 _Avoid_: Card, quiz item
 
 **Source Passage**:
-The short quotation from a Transcript that a generated Question was drawn from, shown with its answer.
+The short quotation from a Transcript, or the text of a Concept Card, that a generated Question was drawn from, shown with its answer.
 _Avoid_: Reference, citation
 
 **Multiple-Choice Question**:
@@ -70,5 +70,5 @@ _Avoid_: Alert, push
 - An **Interactive Review** contains many **Concept Cards** and its own practice questions
 - A **Lesson** has many **Questions**; each **Question** is either a **Multiple-Choice Question** or an **Open Question**
 - A **Question** has many **Reviews** over time; each **Review** has one **Rating**
-- A generated **Question** has one **Source Passage**; a **Question** copied from an **Interactive Review** has none
+- A **Question** generated from a **Transcript** or a **Concept Card** has one **Source Passage**; a **Question** copied from an **Interactive Review**'s practice questions has none
 - A **Reminder** opens one **Review Session** of a few due **Questions**

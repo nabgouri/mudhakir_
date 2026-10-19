@@ -22,11 +22,17 @@ npx supabase functions deploy generate-lesson
 
 Keep the function's **Verify JWT** setting on (the default): only a signed-in student can call it.
 
+In **Authentication → Sign In / Providers**, turn **Email** off, so nobody can make an account other than through Google sign-in, which is limited to the student's test user.
+
 ## 2. Create the routine's environment
 
 At [claude.ai/code/routines](https://claude.ai/code/routines) choose **New routine**. Below the **Instructions** box, open the environment selector, choose to add a new cloud environment, and name it `mudhakir`:
 
-1. **Network access**: **Custom**. Under **Allowed domains** add the host of the Interactive Review pages, the part between `https://` and the next `/` of an address you paste into the app (for example `review.example.org`). Add one line per host if the ma'had uses more than one. Tick **Also include default list of common package managers**, so the run can install the repo's packages.
+1. **Network access**: **Custom**. Under **Allowed domains** add, one per line:
+   - the Supabase host, `<project-ref>.supabase.co`;
+   - the host of the Interactive Review pages, the part between `https://` and the next `/` of an address you paste into the app (for example `review.example.org`), one line per host if the ma'had uses more than one.
+
+   Tick **Also include default list of common package managers**, so the run can install the repo's packages.
 2. **Environment variables**: add one line, with the project URL from Supabase's **Project Settings → API Keys**:
 
    ```
@@ -74,6 +80,9 @@ In the Supabase dashboard, **Edge Functions → Secrets**, add:
 | :- | :- |
 | `ROUTINE_ID` | `trig_…` |
 | `ROUTINE_TOKEN` | `sk-ant-oat01-…` |
+| `STUDENT_USER_ID` | the student's id, from **Authentication → Users** (sign in on the phone once first) |
+
+The function refuses every other account, since each run counts against the student's subscription.
 
 (Or with the CLI from a file outside the repo, so the token stays out of your shell history: `npx supabase secrets set --env-file ~/mudhakir-routine.env`, then delete the file.)
 

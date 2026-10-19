@@ -71,15 +71,6 @@ async function ensureChannel() {
   });
 }
 
-// Asks for the notification permission, when the student adds a Lesson to
-// generate Questions for, so the "Questions ready" notification can show.
-export async function requestQuestionsReadyPermission(): Promise<boolean> {
-  await ensureChannel();
-  const current = await Notifications.getPermissionsAsync();
-  if (current.granted || !current.canAskAgain) return current.granted;
-  return (await Notifications.requestPermissionsAsync()).granted;
-}
-
 // Shows a "Questions ready" notification for each of `awaiting` that a pull
 // made ready. Without the notification permission nothing shows; the
 // Lesson's status still says ready.

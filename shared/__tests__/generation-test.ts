@@ -156,4 +156,13 @@ describe('what the Review Session shows', () => {
       sourcePassage: null,
     });
   });
+
+  test('a prompt with its diacritics in another order is stored as the student would type it', () => {
+    // Shadda before fatha, as some pages encode it; NFC puts the fatha first.
+    const shaddaThenFatha = 'ما معنى الط\u0651\u064Eهارة؟';
+    const [question] = GeneratedQuestions.parse(
+      outputWith((q) => q.splice(0, q.length, { ...q[3], prompt: shaddaThenFatha })),
+    ).questions;
+    expect(toQuestionRecord(question).prompt).toBe('ما معنى الط\u064E\u0651هارة؟');
+  });
 });
