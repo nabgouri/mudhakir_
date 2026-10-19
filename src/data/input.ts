@@ -64,3 +64,21 @@ export function parseQuestion(
   if (correctOption === -1) return { ok: false, problem: 'correctOptionRequired' };
   return { ok: true, value: { kind: 'multiple-choice', prompt, options: kept.map((o) => o.text), correctOption } };
 }
+
+export const MAX_DELAY_MINUTES = 180;
+
+export function parseDelayMinutes(raw: string): number | null {
+  const text = toLatinDigits(raw.trim());
+  if (!/^\d+$/.test(text)) return null;
+  const minutes = Number(text);
+  return minutes <= MAX_DELAY_MINUTES ? minutes : null;
+}
+
+// A latitude or longitude in decimal degrees, as a maps app copies it. The
+// Arabic decimal separator (٫) and comma are accepted as a decimal point.
+export function parseCoordinate(raw: string, limit: 90 | 180): number | null {
+  const text = toLatinDigits(raw.trim()).replace(/[٫,]/, '.');
+  if (!/^[-+]?\d+(\.\d+)?$/.test(text)) return null;
+  const value = Number(text);
+  return Math.abs(value) <= limit ? value : null;
+}

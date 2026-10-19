@@ -63,6 +63,28 @@ const MIGRATIONS: string[] = [
   CREATE TRIGGER reviews_no_delete BEFORE DELETE ON reviews
   BEGIN SELECT RAISE(ABORT, 'reviews are append-only'); END;
   `,
+  // The student's settings: one row. `city_id` names a bundled city, or is
+  // null when the coordinates were typed by hand; `latitude` and `longitude`
+  // are null until a place is chosen, and no Reminder is scheduled until
+  // then. `prayers` is a JSON object of the prayers turned on. The first row
+  // holds the defaults: Muslim World League, 15 minutes after the adhan.
+  `
+  CREATE TABLE settings (
+    id INTEGER PRIMARY KEY NOT NULL CHECK (id = 1),
+    city_id TEXT,
+    latitude REAL,
+    longitude REAL,
+    method TEXT NOT NULL,
+    delay_minutes INTEGER NOT NULL,
+    prayers TEXT NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+  INSERT INTO settings (id, method, delay_minutes, prayers, updated_at) VALUES (
+    1, 'MuslimWorldLeague', 15,
+    '{"fajr":true,"dhuhr":true,"asr":true,"maghrib":true,"isha":true}',
+    CAST(strftime('%s', 'now') AS INTEGER) * 1000
+  );
+  `,
 ];
 
 export async function migrate(db: SQLiteDatabase): Promise<void> {

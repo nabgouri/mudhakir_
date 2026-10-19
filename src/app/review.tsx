@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { deleteQuestion, getQuestion, listStudyQuestions, recordReview, type Question } from '@/data/questions';
 import { DEFAULT_SESSION_SIZE, nextSession, ratingForChoice, type Rating } from '@/engine/study';
+import { rescheduleReminders } from '@/reminders/schedule';
 import { Button, Text } from '@/ui/components';
 import { confirmDeleteQuestion } from '@/ui/confirm';
 import { t } from '@/ui/strings';
@@ -84,6 +85,7 @@ export default function ReviewSessionScreen() {
     setSaving(true);
     try {
       await recordReview(db, currentId, rating, new Date());
+      rescheduleReminders(db);
     } finally {
       setSaving(false);
     }

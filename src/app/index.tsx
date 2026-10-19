@@ -5,6 +5,7 @@ import { Alert, FlatList, Pressable, StyleSheet, View } from 'react-native';
 
 import { parseSubjectName } from '@/data/input';
 import { listStudyQuestions } from '@/data/questions';
+import { getSettings } from '@/data/settings';
 import { createSubject, deleteSubject, listSubjects, renameSubject, type Subject } from '@/data/subjects';
 import { dueCountsBySubject } from '@/engine/study';
 import { Button, Text, TextInput } from '@/ui/components';
@@ -13,8 +14,8 @@ import { colors, space } from '@/ui/theme';
 import { useDbQuery } from '@/ui/use-db-query';
 
 async function loadSubjects(db: SQLiteDatabase) {
-  const [subjects, questions] = await Promise.all([listSubjects(db), listStudyQuestions(db)]);
-  return { subjects, dueCounts: dueCountsBySubject(questions, new Date()) };
+  const [subjects, questions, settings] = await Promise.all([listSubjects(db), listStudyQuestions(db), getSettings(db)]);
+  return { subjects, dueCounts: dueCountsBySubject(questions, new Date()), hasPlace: settings.place !== null };
 }
 
 export default function SubjectsScreen() {
@@ -50,7 +51,18 @@ export default function SubjectsScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: t.subjects }} />
+      <Stack.Screen
+        options={{
+          title: t.subjects,
+          headerRight: () => (
+            <Link href="/settings" asChild>
+              <Pressable accessibilityRole="button" hitSlop={8}>
+                <Text style={styles.headerLink}>{t.settings}</Text>
+              </Pressable>
+            </Link>
+          ),
+        }}
+      />
       <FlatList
         data={subjects ?? []}
         keyExtractor={(subject) => subject.id}
@@ -58,6 +70,13 @@ export default function SubjectsScreen() {
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
           <View style={styles.form}>
+            {data?.hasPlace === false && (
+              <Link href="/settings" asChild>
+                <Pressable style={styles.hint}>
+                  <Text style={styles.hintText}>{t.noPlaceHint}</Text>
+                </Pressable>
+              </Link>
+            )}
             <Link href="/review" asChild>
               <Button title={t.reviewAll} />
             </Link>
@@ -174,6 +193,19 @@ const styles = StyleSheet.create({
   error: {
     color: colors.danger,
     fontSize: 15,
+  },
+  headerLink: {
+    color: colors.onPrimary,
+    fontSize: 16,
+  },
+  hint: {
+    backgroundColor: colors.rightSurface,
+    borderRadius: 12,
+    padding: space.md,
+  },
+  hintText: {
+    fontSize: 16,
+    lineHeight: 28,
   },
   empty: {
     color: colors.textSecondary,
