@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "512151823011",
+    "project_id": "mudhakir",
+    "storage_bucket": "mudhakir.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:512151823011:android:1f0febbcba1aff80c0d516",
+        "android_client_info": {
+          "package_name": "com.nabgouri.mudhakir"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD2GVly0RZXWTyXe5B-Qqc6qCGBrx4BIUk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
