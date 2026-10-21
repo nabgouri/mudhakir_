@@ -1,4 +1,5 @@
 import 'expo-sqlite/localStorage/install';
+import './webcrypto';
 
 import { createClient, processLock, type SupabaseClient } from '@supabase/supabase-js';
 
