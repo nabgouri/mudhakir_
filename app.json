@@ -50,11 +50,31 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "extraProguardRules": "-keep class * extends androidx.room.RoomDatabase { <init>(); }"
+          }
+        }
       ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "forcesRTL": true,
+      "eas": {
+        "projectId": "26ba43e3-8951-4eef-a773-b90e2027f069"
+      }
+    },
+    "owner": "ayman2"
   }
 }
