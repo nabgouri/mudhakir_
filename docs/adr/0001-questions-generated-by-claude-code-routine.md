@@ -12,5 +12,13 @@ Questions are written by a Claude Code routine that runs on the student's own Cl
 
 - Generation is asynchronous: Questions appear minutes after a Lesson is added, not instantly.
 - The app works for one student only, since the routine is tied to that student's Claude account.
-- The Transcript text travels in the routine's trigger body and is never stored in Supabase. That caps one run at about 65,000 characters; a longer Transcript is split across runs.
+- The Transcript text is kept in Supabase only while its run needs it, in a table only the service role reads (`lesson_part_texts`), and deleted as soon as the part is done or failed. It is never in the backup. One run is given at most about 65,000 characters, so a longer Transcript is split across runs.
 - The routine's cloud environment must allow network access to the Supabase host and to the Interactive Review site.
+
+## Amendment: the Transcript text no longer travels in the trigger
+
+At first the text travelled in the routine's trigger body and was never stored in Supabase. But the routine only sees its trigger as text in its conversation, so saving that text to a file meant the model retyping tens of thousands of characters, and the copy never matched the digest the phone stored. Every Lesson with a Transcript failed.
+
+We considered checking Source Passages against the model's own copy instead, without the digest. That keeps the text out of Supabase, but a passage could then be quoted from an altered copy and still pass, which breaks the promise that a Source Passage is the Transcript's own words.
+
+So the `generate-lesson` Edge Function now keeps the part's exact text in `lesson_part_texts` and fires the routine with the request less the text (`FirePayload`); the routine's script fetches the text and checks it against the digest (`routine/fetch-request.ts`). A trigger deletes a part's text once it is done, failed or no longer sent, and a text left over a day (a run that never finished) is cleared the next time a text is kept. The cost is that the student's Transcript now sits in the cloud for the minutes a run takes.

@@ -17,7 +17,8 @@ import { client } from './client';
 // The phone never writes a Lesson's status after `waiting`: the cloud sets
 // it, and the phone takes it on pull. A part's Transcript text leaves the
 // phone only in its request, and is deleted here once the cloud has the
-// part: it is never stored in Supabase or the backup.
+// part. It is never in the backup; the cloud keeps it only while the part's
+// routine run needs it (docs/adr/0001).
 
 const CHANNEL_ID = 'questions-ready';
 export const QUESTIONS_READY_KIND = 'questions-ready';

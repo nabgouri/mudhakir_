@@ -2,9 +2,11 @@
 //
 // The phone calls this with the student's Supabase session and a
 // `GenerateRequest`. The function checks both, records the part as sent,
-// which sets the Lesson to `generating`, and fires the Claude Code routine
-// with the serialized request as the fire `text`. The routine then writes
-// the Questions to Supabase itself (routine/write-questions.ts).
+// which sets the Lesson to `generating`, keeps the part's Transcript text in
+// Supabase for the run (`lesson_part_texts`), and fires the Claude Code
+// routine with the request less that text (`FirePayload`) as the fire
+// `text`. The routine fetches the text and writes the Questions to Supabase
+// itself (routine/fetch-request.ts, routine/write-questions.ts).
 //
 // A part already sent or done is not fired again, so a phone that sends
 // twice (its pull failed) starts one run. A fire that fails takes the part
@@ -20,7 +22,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 
-import { GenerateRequest } from '../../../shared/generation.ts';
+import { GenerateRequest, toFirePayload } from '../../../shared/generation.ts';
 
 const FIRE_URL = 'https://api.anthropic.com/v1/claude_code/routines';
 
@@ -42,7 +44,7 @@ async function fireRoutine(request: z.infer<typeof GenerateRequest>): Promise<{ 
       'anthropic-version': '2023-06-01',
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ text: JSON.stringify(request) }),
+    body: JSON.stringify({ text: JSON.stringify(toFirePayload(request)) }),
   });
   if (response.ok) return { ok: true };
   return { ok: false, status: response.status, detail: await response.text() };
@@ -83,14 +85,33 @@ Deno.serve(async (req) => {
   if (start === null) return reply(404, { error: 'No such Lesson' });
   if (start !== 'fire') return reply(200, { status: start === 'done' ? 'already-done' : 'already-sent' });
 
-  const fired = await fireRoutine(request).catch((error: Error) => ({ ok: false as const, status: 0, detail: error.message }));
-  if (!fired.ok) {
-    console.error('Firing the routine failed', fired.status, fired.detail);
+  // The part back to not sent (which also drops its kept text), so the phone
+  // sends it again on a later sync.
+  async function unstart() {
     const { error: unstartError } = await supabase.rpc('unstart_lesson_part', {
       p_lesson_id: request.lessonId,
       p_part_index: request.partIndex,
     });
     if (unstartError) console.error('Taking the part back to not sent failed', unstartError);
+  }
+
+  if (request.transcriptText !== undefined) {
+    const { error: stashError } = await supabase.rpc('stash_part_text', {
+      p_lesson_id: request.lessonId,
+      p_part_index: request.partIndex,
+      p_text: request.transcriptText,
+    });
+    if (stashError) {
+      console.error('Keeping the Transcript text failed', stashError);
+      await unstart();
+      return reply(500, { error: stashError.message });
+    }
+  }
+
+  const fired = await fireRoutine(request).catch((error: Error) => ({ ok: false as const, status: 0, detail: error.message }));
+  if (!fired.ok) {
+    console.error('Firing the routine failed', fired.status, fired.detail);
+    await unstart();
     // 429: an hourly fire limit; the phone tries again on a later sync.
     return reply(fired.status === 429 ? 429 : 502, { error: 'The routine could not be started' });
   }

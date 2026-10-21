@@ -1,14 +1,15 @@
 // The lesson-generation contract: what the app asks the routine to do
-// (`GenerateRequest`) and what the routine hands back (`GeneratedQuestions`).
-// This one module is imported by the app, the `generate-lesson` Edge
-// Function (supabase/functions/) and the routine's write script (routine/),
-// so all three check the same shapes. It depends only on `zod` and must stay
-// plain TypeScript that Node, Deno and Metro can all load.
+// (`GenerateRequest`), what the routine's trigger carries (`FirePayload`)
+// and what the routine hands back (`GeneratedQuestions`). This one module is
+// imported by the app, the `generate-lesson` Edge Function
+// (supabase/functions/) and the routine's scripts (routine/), so all of them
+// check the same shapes. It depends only on `zod` and must stay plain
+// TypeScript that Node, Deno and Metro can all load.
 
 import { z } from 'zod';
 
-// The routine's fire endpoint takes at most 65,536 characters of `text`; the
-// serialized request must fit, with a little room to spare.
+// The most one run is given: a longer Transcript is split into parts, each
+// its own run, so the routine reads a part whole.
 export const MAX_REQUEST_TEXT = 65_000;
 
 // An http or https address with a host. Checked with a pattern rather than
@@ -57,6 +58,28 @@ export const GenerateRequest = z
   });
 
 export type GenerateRequestInput = z.input<typeof GenerateRequest>;
+
+// What the routine's trigger carries: the request without its Transcript
+// text. The routine is a model, and a model can't copy tens of thousands of
+// characters exactly, so the Edge Function keeps the text in Supabase for
+// the run and the routine fetches it by script (routine/fetch-request.ts),
+// which rebuilds the `GenerateRequest`.
+export const FirePayload = z
+  .object({
+    lessonId: z.uuid(),
+    subjectName: Text,
+    lessonNumber: z.number().int().min(1),
+    interactiveReviewUrl: InteractiveReviewUrl.optional(),
+    hasTranscript: z.boolean(),
+    partIndex: PartIndex,
+    partCount: z.number().int().min(1),
+  })
+  .strict();
+
+export function toFirePayload(request: z.output<typeof GenerateRequest>): z.output<typeof FirePayload> {
+  const { transcriptText, ...rest } = request;
+  return { ...rest, hasTranscript: transcriptText !== undefined };
+}
 
 // Where a Question came from. A Question copied from the Interactive Review
 // has no Source Passage; one written from a Concept Card or the Transcript

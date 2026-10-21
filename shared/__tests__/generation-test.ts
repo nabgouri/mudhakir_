@@ -1,9 +1,11 @@
 import { questionFromRow } from '../../src/data/question-row';
 import {
+  FirePayload,
   GenerateRequest,
   GeneratedQuestions,
   MAX_REQUEST_TEXT,
   problemsWithOutput,
+  toFirePayload,
   toQuestionRecord,
 } from '../generation';
 import interactiveReviewOutput from './fixtures/interactive-review-output.json';
@@ -185,9 +187,29 @@ describe('GenerateRequest', () => {
     expect(GenerateRequest.safeParse({ ...interactiveReviewRequest, ...change }).success).toBe(false);
   });
 
-  test('rejects a part whose serialized request would not fit the routine trigger', () => {
+  test('rejects a part over the size one run is given', () => {
     const transcriptText = 'ب'.repeat(MAX_REQUEST_TEXT);
     expect(GenerateRequest.safeParse({ ...interactiveReviewRequest, transcriptText }).success).toBe(false);
+  });
+});
+
+describe('FirePayload', () => {
+  test('leaves the Transcript text out and says the part has one', () => {
+    const payload = toFirePayload(GenerateRequest.parse(transcriptRequest));
+    expect(payload).not.toHaveProperty('transcriptText');
+    expect(payload.hasTranscript).toBe(true);
+    expect(FirePayload.safeParse(payload).error).toBeUndefined();
+  });
+
+  test('a part without a Transcript says so', () => {
+    const payload = toFirePayload(GenerateRequest.parse(interactiveReviewRequest));
+    expect(payload).toEqual({ ...interactiveReviewRequest, hasTranscript: false });
+    expect(FirePayload.safeParse(payload).error).toBeUndefined();
+  });
+
+  test('rejects a payload that still carries the text', () => {
+    const payload = { ...toFirePayload(GenerateRequest.parse(transcriptRequest)), transcriptText: 'نص' };
+    expect(FirePayload.safeParse(payload).success).toBe(false);
   });
 });
 
