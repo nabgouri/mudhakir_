@@ -7,7 +7,15 @@
 
 import { createHash } from 'node:crypto';
 
-export async function supabase(path: string, init: RequestInit = {}): Promise<unknown> {
+import { EnvHttpProxyAgent, fetch } from 'undici';
+
+// Node's own fetch ignores HTTPS_PROXY and connects straight to Supabase,
+// so in the routine's environment a request would miss the agent proxy and
+// arrive without the key (401, "No API key found in request"). Requests go
+// through the proxy whenever the environment names one.
+const dispatcher = process.env.HTTPS_PROXY || process.env.https_proxy ? new EnvHttpProxyAgent() : undefined;
+
+export async function supabase(path: string, init: { method?: string; body?: string } = {}): Promise<unknown> {
   const url = process.env.SUPABASE_URL;
   if (!url) throw new Error('Set SUPABASE_URL to the Supabase project URL (https://<project-ref>.supabase.co).');
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -18,7 +26,7 @@ export async function supabase(path: string, init: RequestInit = {}): Promise<un
     // secret key (sb_secret_…) goes in apikey only.
     if (!key.startsWith('sb_')) headers.Authorization = `Bearer ${key}`;
   }
-  const response = await fetch(`${url.replace(/\/+$/, '')}/rest/v1/${path}`, { ...init, headers });
+  const response = await fetch(`${url.replace(/\/+$/, '')}/rest/v1/${path}`, { ...init, headers, dispatcher });
   const text = await response.text();
   if (!response.ok) throw new Error(`${path} failed (${response.status}): ${text}`);
   return JSON.parse(text);
