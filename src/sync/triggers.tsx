@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { AppState } from 'react-native';
 
 import { supabase } from './client';
+import { registerPushToken } from './push';
 import { hasPendingChanges, syncNow } from './sync';
 
 // How long after a local change to sync, so a burst of changes (a Review
@@ -12,7 +13,9 @@ const SYNC_DELAY_MS = 5000;
 
 // Keeps the cloud backup in step: syncs when the app opens or comes back to
 // the foreground, a little after local changes, and when the phone comes
-// back online with changes still to send. The background task also syncs.
+// back online with changes still to send. The background task also syncs,
+// and so does a push from the cloud, for which the signed-in phone
+// registers its push token.
 export function Sync() {
   const db = useSQLiteContext();
 
@@ -21,6 +24,13 @@ export function Sync() {
     if (auth === undefined) return;
     syncNow(db);
     auth.startAutoRefresh();
+
+    // Deferred: Supabase must not be called from inside this callback.
+    const signIns = auth.onAuthStateChange((event, session) => {
+      if (session !== null && (event === 'INITIAL_SESSION' || event === 'SIGNED_IN')) {
+        setTimeout(() => registerPushToken().catch((error) => console.warn('Registering for pushes failed', error)));
+      }
+    });
 
     let timer: ReturnType<typeof setTimeout> | undefined;
     const syncSoon = () => {
@@ -49,6 +59,7 @@ export function Sync() {
     });
     return () => {
       clearTimeout(timer);
+      signIns.data.subscription.unsubscribe();
       changes.remove();
       network.remove();
       appState.remove();

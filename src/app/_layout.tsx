@@ -11,19 +11,19 @@ import { DATABASE_NAME, migrate } from '@/data/database';
 import { registerBackgroundReschedule } from '@/reminders/background';
 import { REMINDER_URL, rescheduleReminders } from '@/reminders/schedule';
 import { QUESTIONS_READY_KIND } from '@/sync/generation';
+import { registerSyncOnPush } from '@/sync/push';
 import { Sync } from '@/sync/triggers';
 import { colors, fonts } from '@/ui/theme';
 
 SplashScreen.preventAutoHideAsync();
 
-// A Reminder that fires while the app is open still shows.
+// A Reminder that fires while the app is open still shows. The cloud's
+// data-only push (src/sync/push.ts) has nothing to show.
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
+  handleNotification: async (notification) => {
+    const shown = notification.request.content.title !== null;
+    return { shouldShowBanner: shown, shouldShowList: shown, shouldPlaySound: shown, shouldSetBadge: false };
+  },
 });
 
 // A Reminder opens a Review Session; "Questions ready" opens its Lesson.
@@ -45,6 +45,7 @@ function Reminders() {
   useEffect(() => {
     rescheduleReminders(db);
     registerBackgroundReschedule().catch((error) => console.warn('Registering the background task failed', error));
+    registerSyncOnPush().catch((error) => console.warn('Registering the push task failed', error));
 
     const appState = AppState.addEventListener('change', (state) => {
       if (state === 'active' || state === 'background') rescheduleReminders(db);

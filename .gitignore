@@ -42,6 +42,9 @@ example
 /ios
 /android
 
+# Firebase service account key for push (docs/setup-push.md); it goes to EAS, never here
+*-firebase-adminsdk-*.json
+
 # Supabase CLI
 supabase/.temp/
 supabase/.branches/
