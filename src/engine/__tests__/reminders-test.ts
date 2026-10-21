@@ -82,6 +82,22 @@ describe('reminderTimes', () => {
     expect(prayers(reminders).sort()).toEqual(['asr', 'dhuhr', 'fajr', 'isha', 'maghrib']);
   });
 
+  // Agadir (Tikiouine), 21 October 2026, as فجر shows them with its Morocco
+  // method on a phone whose clock was on UTC. Its Asr is 2 minutes later than
+  // adhan's, from an adjustment of its own; that one is only checked roughly.
+  test('matches the Moroccan times for Agadir', () => {
+    const settings = { ...MAKKAH, latitude: 30.3815, longitude: -9.5036, method: 'Morocco' as const, delayMinutes: 0 };
+    const utc = (hours: number, minutes: number) => new Date(Date.UTC(2026, 9, 21, hours, minutes));
+    const expected = { fajr: utc(5, 19), dhuhr: utc(12, 28), asr: utc(15, 36), maghrib: utc(18, 6), isha: utc(19, 16) };
+    const day = { from: utc(0, 0), to: utc(23, 0) };
+    const reminders = reminderTimes(settings, day, SOMETHING_DUE);
+    expect(prayers(reminders)).toEqual(['fajr', 'dhuhr', 'asr', 'maghrib', 'isha']);
+    for (const { prayer, at: fireAt } of reminders) {
+      const tolerance = prayer === 'asr' ? 3 * MINUTE : MINUTE;
+      expect(Math.abs(fireAt.getTime() - expected[prayer].getTime())).toBeLessThanOrEqual(tolerance);
+    }
+  });
+
   test("keeps the previous day's Isha when the delay carries it past midnight", () => {
     const settings = { ...MAKKAH, delayMinutes: 250 };
     const reminders = reminderTimes(settings, { from: at(0, 0, 6), to: at(3, 0, 6) }, SOMETHING_DUE);

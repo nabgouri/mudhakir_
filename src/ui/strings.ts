@@ -139,6 +139,7 @@ export const t = {
   methodLabel: 'طريقة حساب مواقيت الصلاة',
   methods: {
     MuslimWorldLeague: 'رابطة العالم الإسلامي',
+    Morocco: 'وزارة الأوقاف والشؤون الإسلامية المغربية',
     Egyptian: 'الهيئة المصرية العامة للمساحة',
     Karachi: 'جامعة العلوم الإسلامية بكراتشي',
     UmmAlQura: 'تقويم أم القرى',
@@ -151,6 +152,9 @@ export const t = {
     Tehran: 'معهد الجيوفيزياء بجامعة طهران',
     Turkey: 'رئاسة الشؤون الدينية التركية',
   } satisfies Record<CalculationMethodName, string>,
+  // Isha is either an angle or a fixed time after Maghrib.
+  methodAngles: (fajrAngle: number, isha: { angle: number } | { minutes: number }) =>
+    `الفجر ${fajrAngle}° · العشاء ${'angle' in isha ? `${isha.angle}°` : `بعد المغرب بـ ${isha.minutes} دقيقة`}`,
   delayLabel: 'التذكير بعد الأذان بـ (دقائق)',
   delayInvalid: `اكتب عدد الدقائق، من 0 إلى ${MAX_DELAY_MINUTES}.`,
   prayersLabel: 'الصلوات التي يصلك بعدها تذكير',

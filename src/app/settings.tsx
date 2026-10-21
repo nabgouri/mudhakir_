@@ -3,10 +3,10 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 
-import { getCity, searchCities, type City } from '@/data/cities';
+import { countryMethod, getCity, searchCities, type City } from '@/data/cities';
 import { parseCoordinate, parseDelayMinutes } from '@/data/input';
 import { getSettings, saveSettings, type Place, type Settings } from '@/data/settings';
-import { CALCULATION_METHODS, PRAYERS } from '@/engine/reminders';
+import { CALCULATION_METHODS, methodParameters, PRAYERS, type CalculationMethodName } from '@/engine/reminders';
 import { requestReminderPermission, rescheduleReminders } from '@/reminders/schedule';
 import { BackupSection } from '@/ui/backup-section';
 import { Button, Text, TextInput } from '@/ui/components';
@@ -17,6 +17,12 @@ const MAX_RESULTS = 20;
 
 function cityLabel(city: City): string {
   return `${city.name}، ${city.country}`;
+}
+
+// The angles are what tell the methods apart.
+function methodAnglesLabel(method: CalculationMethodName): string {
+  const { fajrAngle, ishaAngle, ishaInterval } = methodParameters(method);
+  return t.methodAngles(fajrAngle, ishaInterval > 0 ? { minutes: ishaInterval } : { angle: ishaAngle });
 }
 
 function placeLabel(place: Place): string {
@@ -65,8 +71,12 @@ export default function SettingsScreen() {
     setNotice(null);
   }
 
+  // The method follows the city's country; the student can still change it.
   function pickCity(city: City) {
-    update({ place: { cityId: city.id, latitude: city.latitude, longitude: city.longitude } });
+    update({
+      place: { cityId: city.id, latitude: city.latitude, longitude: city.longitude },
+      method: countryMethod(city.country),
+    });
     setQuery('');
   }
 
@@ -161,6 +171,7 @@ export default function SettingsScreen() {
             onPress={() => update({ method })}
           >
             <Text>{t.methods[method]}</Text>
+            <Text style={styles.meta}>{methodAnglesLabel(method)}</Text>
           </Pressable>
         ))}
       </View>

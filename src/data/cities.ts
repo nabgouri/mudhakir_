@@ -1,6 +1,7 @@
 // The bundled list of cities the student picks from, so prayer times need
 // no network. Coordinates are the city centre, which is close enough: a few
 // kilometres move a prayer time by seconds.
+import type { CalculationMethodName } from '@/engine/reminders';
 
 export type City = {
   id: string;
@@ -170,6 +171,33 @@ export const CITIES: readonly City[] = ROWS.map(([id, name, nameLatin, country, 
 
 export function getCity(id: string): City | undefined {
   return CITIES.find((city) => city.id === id);
+}
+
+// The method a country's own authority uses, so the times match the ones
+// its mosques call the adhan by. Malaysia's JAKIM and Indonesia's Kemenag use
+// Singapore's angles. Other countries get the Muslim World League's.
+export const COUNTRY_METHODS: Record<string, CalculationMethodName> = {
+  'السعودية': 'UmmAlQura',
+  'الكويت': 'Kuwait',
+  'قطر': 'Qatar',
+  'الإمارات': 'Dubai',
+  'مصر': 'Egyptian',
+  'المغرب': 'Morocco',
+  'باكستان': 'Karachi',
+  'الهند': 'Karachi',
+  'بنغلاديش': 'Karachi',
+  'أفغانستان': 'Karachi',
+  'إيران': 'Tehran',
+  'تركيا': 'Turkey',
+  'سنغافورة': 'Singapore',
+  'ماليزيا': 'Singapore',
+  'إندونيسيا': 'Singapore',
+  'الولايات المتحدة': 'NorthAmerica',
+  'كندا': 'NorthAmerica',
+};
+
+export function countryMethod(country: string): CalculationMethodName {
+  return COUNTRY_METHODS[country] ?? 'MuslimWorldLeague';
 }
 
 // Diacritics, tatweel and letter variants are ignored, so "مكة" finds

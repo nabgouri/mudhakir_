@@ -2,16 +2,37 @@
 // when something will be due. Part of the study engine: pure, no I/O.
 // Prayer times come from the `adhan` library, calculated for the phone's
 // local calendar days, so they need no network.
-import { CalculationMethod, Coordinates, HighLatitudeRule, PolarCircleResolution, PrayerTimes } from 'adhan';
+import {
+  CalculationMethod,
+  Coordinates,
+  HighLatitudeRule,
+  PolarCircleResolution,
+  PrayerTimes,
+  type CalculationParameters,
+} from 'adhan';
 
 import { due, type StudyQuestion } from './study';
 
 export const PRAYERS = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'] as const;
 export type Prayer = (typeof PRAYERS)[number];
 
-// adhan's methods, less `Other`, which has no angles of its own.
+// Methods adhan lacks, built on its `Other` (which has no angles of its own).
+// Morocco's Ministry of Habous: Fajr at 19°, Isha at 17°, and Dhuhr and
+// Maghrib 5 minutes after the astronomical time.
+const OWN_METHODS = {
+  Morocco: () => {
+    const parameters = CalculationMethod.Other();
+    parameters.fajrAngle = 19;
+    parameters.ishaAngle = 17;
+    parameters.methodAdjustments = { ...parameters.methodAdjustments, dhuhr: 5, maghrib: 5 };
+    return parameters;
+  },
+};
+
+// adhan's methods, less `Other`, and ours.
 export const CALCULATION_METHODS = [
   'MuslimWorldLeague',
+  'Morocco',
   'Egyptian',
   'Karachi',
   'UmmAlQura',
@@ -23,8 +44,15 @@ export const CALCULATION_METHODS = [
   'Singapore',
   'Tehran',
   'Turkey',
-] as const satisfies readonly (keyof typeof CalculationMethod)[];
+] as const satisfies readonly (Exclude<keyof typeof CalculationMethod, 'Other'> | keyof typeof OWN_METHODS)[];
 export type CalculationMethodName = (typeof CALCULATION_METHODS)[number];
+
+// A fresh set of the method's parameters, safe to change.
+export function methodParameters(method: CalculationMethodName): CalculationParameters {
+  return method in OWN_METHODS
+    ? OWN_METHODS[method as keyof typeof OWN_METHODS]()
+    : CalculationMethod[method as Exclude<CalculationMethodName, keyof typeof OWN_METHODS>]();
+}
 
 export type PrayerSettings = {
   latitude: number;
@@ -52,7 +80,7 @@ export function reminderTimes(
   questions: readonly StudyQuestion[],
 ): Reminder[] {
   const coordinates = new Coordinates(settings.latitude, settings.longitude);
-  const parameters = CalculationMethod[settings.method]();
+  const parameters = methodParameters(settings.method);
   // Far north or south, twilight or the sun itself may not rise or set: Fajr
   // and Isha then follow a share of the night, and on polar days the nearest
   // day that has the prayer is used, so no prayer goes missing.
