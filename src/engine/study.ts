@@ -38,9 +38,11 @@ export type Limits = { newPerDay?: number };
 export const DEFAULT_NEW_PER_DAY = 10;
 export const DEFAULT_SESSION_SIZE = 5;
 
-// The default (re)learning steps (1m, 10m) are shorter than the gap between
-// two prayers, so a Question rated Again is due at the next Reminder.
-const scheduler = fsrs();
+// Any step is shorter than the gap between two prayers, so a step means "at
+// the next Reminder". A new Question keeps one step, for Again and Hard; Good
+// and Easy skip it, rather than bring every new Question back at the next
+// prayer (docs/adr/0003-new-questions-fill-only-free-review-places.md).
+const scheduler = fsrs({ learning_steps: ['1m'] });
 
 const FSRS_RATINGS: Record<Rating, Grade> = {
   again: FsrsRating.Again,
