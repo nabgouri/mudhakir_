@@ -2,7 +2,7 @@
 
 Each Review Session asks 6 Questions, five times a day, so about 30 a day. The ma'had posts about 7 Lessons a week, and one Lesson gave 31 Questions. Each new Question comes back several times over the following weeks, and daily reviews settle at roughly 7–10 times the number of new Questions added each day. So 30 places sustain only a few new Questions a day. A fixed cap of 10 new a day would let the unseen queue grow without end.
 
-So a new Question is introduced only into a place left free once that session's due reviews are asked. They come in this order:
+So a new Question is introduced only into a place left free once that session's due reviews are asked, and one session introduces at most 3 (about 15 a day), so a quiet day can't load the following weeks. "Newest" is the highest Lesson number in its Subject, so importing past Lessons in any order doesn't change it. They come in this order:
 
 1. The newest Lesson's Core Questions.
 2. Older Lessons' Core Questions, oldest first.

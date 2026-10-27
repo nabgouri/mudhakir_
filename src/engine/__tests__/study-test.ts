@@ -1,4 +1,16 @@
-import { due, dueCountsBySubject, nextSession, rate, ratingForChoice, replay, type QuestionState, type Rating, type StudyQuestion } from '../study';
+import {
+  DEFAULT_SESSION_SIZE,
+  NEW_PER_SESSION,
+  due,
+  dueCountsBySubject,
+  nextSession,
+  rate,
+  ratingForChoice,
+  replay,
+  type QuestionState,
+  type Rating,
+  type StudyQuestion,
+} from '../study';
 
 // A fixed clock on one day. Prayer times are those of a typical day; the
 // engine only sees the times.
@@ -10,7 +22,7 @@ const ASR = at(15, 45);
 const HOUR = 60 * 60 * 1000;
 
 function question(id: string, overrides: Partial<StudyQuestion> = {}): StudyQuestion {
-  return { id, subjectId: 'fiqh', createdAt: 0, state: null, ...overrides };
+  return { id, subjectId: 'fiqh', lessonNumber: 1, priority: 'core', createdAt: 0, state: null, ...overrides };
 }
 
 // The state after a series of Reviews, each made as soon as the previous
@@ -95,11 +107,13 @@ describe('replay', () => {
   });
 });
 
+// A Question reviewed before and due again at `dueAt`.
+const reviewedState = (dueAt: Date, firstReview = at(8, 0, -10)): QuestionState => ({
+  ...rate(null, 'good', firstReview),
+  due: dueAt.getTime(),
+});
+
 describe('due', () => {
-  const reviewedState = (dueAt: Date, firstReview = at(8, 0, -10)): QuestionState => ({
-    ...rate(null, 'good', firstReview),
-    due: dueAt.getTime(),
-  });
 
   test('Questions not yet due are left out', () => {
     const questions = [question('later', { state: reviewedState(at(18)) })];
@@ -116,47 +130,52 @@ describe('due', () => {
     expect(due(questions, ASR).map((q) => q.id)).toEqual(['overdue-1d', 'overdue-1h', 'new-a', 'new-b']);
   });
 
-  test('new Questions are introduced in the order they were added', () => {
+  test('new Questions of one Lesson are introduced in the order they were added', () => {
     const questions = [question('third', { createdAt: 3 }), question('first', { createdAt: 1 }), question('second', { createdAt: 2 })];
     expect(due(questions, ASR).map((q) => q.id)).toEqual(['first', 'second', 'third']);
   });
 
-  test.each([
-    // [new Questions waiting, already introduced today, limit, expected new Questions offered]
-    [20, 0, 10, 10],
-    [20, 4, 10, 6],
-    [20, 10, 10, 0],
-    [20, 12, 10, 0],
-    [3, 0, 10, 3],
-  ])('with %i new Questions, %i introduced today and a limit of %i, %i new ones are due', (waiting, introduced, limit, expected) => {
-    const fresh = Array.from({ length: waiting }, (_, i) => question(`new-${i}`, { createdAt: i }));
-    // Introduced earlier today and not due again until tomorrow.
-    const today = Array.from({ length: introduced }, (_, i) =>
-      question(`today-${i}`, { state: reviewedState(at(9, 0, 1), at(7)) }),
-    );
-    const result = due([...fresh, ...today], ASR, {}, { newPerDay: limit });
-    expect(result.filter((q) => q.state === null)).toHaveLength(expected);
-  });
-
-  test('Questions introduced yesterday do not count against today’s limit', () => {
-    const fresh = Array.from({ length: 5 }, (_, i) => question(`new-${i}`, { createdAt: i }));
-    const yesterday = Array.from({ length: 5 }, (_, i) =>
-      question(`old-${i}`, { state: reviewedState(at(9, 0, 1), at(20, 0, -1)) }),
-    );
-    expect(due([...fresh, ...yesterday], ASR, {}, { newPerDay: 5 })).toHaveLength(5);
+  test('at most three new Questions are offered at a time', () => {
+    const fresh = Array.from({ length: 20 }, (_, i) => question(`new-${i}`, { createdAt: i }));
+    expect(due(fresh, ASR)).toHaveLength(NEW_PER_SESSION);
   });
 
   test('the limit does not hold back Questions that are already being reviewed', () => {
     const overdue = Array.from({ length: 12 }, (_, i) => question(`overdue-${i}`, { state: reviewedState(at(9), at(7)) }));
-    expect(due(overdue, ASR, {}, { newPerDay: 10 })).toHaveLength(12);
+    expect(due(overdue, ASR)).toHaveLength(12);
   });
 
-  test('the daily limit counts new Questions introduced in every Subject, also when filtered', () => {
-    const fiqhToday = Array.from({ length: 10 }, (_, i) =>
-      question(`fiqh-${i}`, { subjectId: 'fiqh', state: reviewedState(at(9, 0, 1), at(7)) }),
-    );
-    const aqeedahNew = Array.from({ length: 5 }, (_, i) => question(`aqeedah-${i}`, { subjectId: 'aqeedah', createdAt: i }));
-    expect(due([...fiqhToday, ...aqeedahNew], ASR, { subjectId: 'aqeedah' }, { newPerDay: 10 })).toEqual([]);
+  test('the newest Lesson’s Core Questions come first, then older Lessons’ Core ones, oldest first, then Detail ones', () => {
+    const questions = [
+      question('l1-detail', { lessonNumber: 1, priority: 'detail', createdAt: 1 }),
+      question('l3-detail', { lessonNumber: 3, priority: 'detail', createdAt: 2 }),
+      question('l2-core', { lessonNumber: 2, createdAt: 3 }),
+      question('l1-core', { lessonNumber: 1, createdAt: 4 }),
+      question('l3-core', { lessonNumber: 3, createdAt: 5 }),
+    ];
+    const newOrder = (qs: StudyQuestion[]) => due(qs, ASR).map((q) => q.id);
+    expect(newOrder(questions)).toEqual(['l3-core', 'l1-core', 'l2-core']);
+    const coreSeen = questions.map((q) => (q.priority === 'core' ? { ...q, state: reviewedState(at(9, 0, 1)) } : q));
+    expect(newOrder(coreSeen)).toEqual(['l1-detail', 'l3-detail']);
+  });
+
+  test('once the newest Lesson’s Core Questions are introduced, the oldest Lesson’s come next', () => {
+    const questions = [
+      question('l3-core', { lessonNumber: 3, state: reviewedState(at(9, 0, 1)) }),
+      question('l2-core', { lessonNumber: 2, createdAt: 1 }),
+      question('l1-core', { lessonNumber: 1, createdAt: 2 }),
+    ];
+    expect(due(questions, ASR).map((q) => q.id)).toEqual(['l1-core', 'l2-core']);
+  });
+
+  test('each Subject’s newest Lesson counts as newest, and the Subjects take turns', () => {
+    const questions = [
+      question('aqeedah-12-a', { subjectId: 'aqeedah', lessonNumber: 12, createdAt: 1 }),
+      question('aqeedah-12-b', { subjectId: 'aqeedah', lessonNumber: 12, createdAt: 2 }),
+      question('quloub-14-a', { subjectId: 'quloub', lessonNumber: 14, createdAt: 3 }),
+      question('aqeedah-11', { subjectId: 'aqeedah', lessonNumber: 11, createdAt: 0 }),
+    ];
+    expect(due(questions, ASR).map((q) => q.id)).toEqual(['aqeedah-12-a', 'quloub-14-a', 'aqeedah-12-b']);
   });
 
   test('a Subject filter keeps only that Subject’s Questions', () => {
@@ -170,20 +189,52 @@ describe('due', () => {
 });
 
 describe('nextSession', () => {
-  const many = (subjectId: string, count: number) =>
-    Array.from({ length: count }, (_, i) => question(`${subjectId}-${i}`, { subjectId, createdAt: i }));
+  const reviewed = (subjectId: string, count: number, dueAt = at(9)) =>
+    Array.from({ length: count }, (_, i) =>
+      question(`${subjectId}-due-${i}`, { subjectId, state: reviewedState(new Date(dueAt.getTime() + i * 60_000)) }),
+    );
+  const fresh = (subjectId: string, count: number) =>
+    Array.from({ length: count }, (_, i) => question(`${subjectId}-new-${i}`, { subjectId, createdAt: i }));
+
+  test('a session asks six Questions', () => {
+    expect(DEFAULT_SESSION_SIZE).toBe(6);
+    expect(nextSession(reviewed('fiqh', 12), ASR)).toHaveLength(6);
+  });
 
   test.each([
-    [12, 5, 5],
-    [3, 5, 3],
-    [0, 5, 0],
+    [12, 6, 6],
+    [3, 6, 3],
+    [0, 6, 0],
     [12, 8, 8],
   ])('with %i due Questions and a session size of %i, the session has %i', (available, size, expected) => {
-    expect(nextSession(many('fiqh', available), ASR, size)).toHaveLength(expected);
+    expect(nextSession(reviewed('fiqh', available), ASR, size)).toHaveLength(expected);
+  });
+
+  test.each([
+    // [due reviews, new Questions waiting, expected new Questions asked]
+    [4, 10, 2],
+    [6, 10, 0],
+    [0, 10, 3],
+    [1, 1, 1],
+  ])('with %i due reviews and %i new Questions, a session of six asks %i new ones', (reviews, waiting, expected) => {
+    const session = nextSession([...reviewed('fiqh', reviews), ...fresh('fiqh', waiting)], ASR, 6);
+    expect(session.filter((q) => q.state === null)).toHaveLength(expected);
+  });
+
+  test('a session alternates between Subjects, starting with the most urgent Question', () => {
+    const questions = [...reviewed('fiqh', 3, at(10)), ...reviewed('aqeedah', 3, at(9))];
+    expect(nextSession(questions, ASR, 6).map((q) => q.subjectId)).toEqual([
+      'aqeedah',
+      'fiqh',
+      'aqeedah',
+      'fiqh',
+      'aqeedah',
+      'fiqh',
+    ]);
   });
 
   test('a session filtered to one Subject asks only that Subject’s Questions', () => {
-    const questions = [...many('fiqh', 6), ...many('aqeedah', 6)];
+    const questions = [...reviewed('fiqh', 6), ...reviewed('aqeedah', 6)];
     const session = nextSession(questions, ASR, 5, { subjectId: 'aqeedah' });
     expect(session).toHaveLength(5);
     expect(session.every((q) => q.subjectId === 'aqeedah')).toBe(true);
@@ -191,7 +242,7 @@ describe('nextSession', () => {
 
   test('a session takes the most urgent due Questions first', () => {
     const overdue = question('overdue', { state: { ...rate(null, 'good', at(7, 0, -3)), due: at(9).getTime() } });
-    const session = nextSession([...many('fiqh', 6), overdue], ASR, 5);
+    const session = nextSession([...reviewed('fiqh', 6, at(12)), overdue], ASR, 5);
     expect(session[0].id).toBe('overdue');
   });
 

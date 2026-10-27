@@ -156,6 +156,11 @@ const MIGRATIONS: string[] = [
     SELECT id, 0 FROM lessons
     WHERE generation_status = 'waiting' AND interactive_review_url IS NOT NULL AND deleted_at IS NULL;
   `,
+  // Core and Detail Questions (docs/adr/0003), as in the cloud's
+  // `questions`. A Question the student adds by hand is Core.
+  `
+  ALTER TABLE questions ADD COLUMN priority TEXT NOT NULL DEFAULT 'core' CHECK (priority IN ('core', 'detail'));
+  `,
 ];
 
 export async function migrate(db: SQLiteDatabase): Promise<void> {

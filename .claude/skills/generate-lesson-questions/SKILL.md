@@ -58,19 +58,25 @@ Write a file such as `/tmp/questions-<lessonId>-<partIndex>.json`, shaped as `Ge
   "lessonId": "<from the request>",
   "partIndex": 0,
   "questions": [
-    { "kind": "open", "origin": "concept-card", "prompt": "ما تعريف الطَّهارة لغةً؟",
+    { "kind": "open", "origin": "concept-card", "priority": "core", "prompt": "ما تعريف الطَّهارة لغةً؟",
       "answer": "النَّظافة والنَّزاهة عن الأقذار.",
       "sourcePassage": "الطَّهارة لغةً: النَّظافة والنَّزاهة عن الأقذار." },
-    { "kind": "multiple-choice", "origin": "interactive-review", "prompt": "…",
+    { "kind": "multiple-choice", "origin": "interactive-review", "priority": "detail", "prompt": "…",
       "options": ["…", "…", "…"], "correctOption": 2 },
-    { "kind": "open", "origin": "interactive-review", "prompt": "صح أم خطأ: …", "answer": "صح" }
+    { "kind": "open", "origin": "interactive-review", "priority": "detail", "prompt": "صح أم خطأ: …", "answer": "صح" }
   ]
 }
 ```
 
 `correctOption` counts from 0. Keep the material's order: the Concept Card Questions first, then the practice questions, then the Transcript Questions in the order of the text. `shared/__tests__/fixtures/interactive-review-output.json` and `shared/__tests__/fixtures/transcript-output.json` are complete examples.
 
-**Practice questions** (`origin: "interactive-review"`) are copied unchanged:
+**Every Question is small and marked Core or Detail.** The student answers a few Questions after each prayer and checks an Open Question's answer against the shown one in seconds (`docs/adr/0003-new-questions-fill-only-free-review-places.md`):
+
+- One point per Question, with an answer of about one line. A division (تقسيم) or a list of parts, conditions or pillars gets one Question per part (such as «ما القسم الثالث من أقسام المياه؟»), plus one Question asking for the parts by name, so the student also remembers how many there are. Never one Question whose answer is a whole list with its explanations.
+- A «لماذا» Question (the reason for a ruling) or a «ما الفرق بين…» Question (telling two rulings or terms apart) only when the material itself states the reason or the difference. Never an invented case or scenario («رجل توضأ ثم…»): a made-up case can state a ruling the material does not.
+- `priority` is `"core"` for a Question on one of the Lesson's main points: a definition, a division (the Question asking for its parts by name), a ruling (حكم), or the evidence for one. That is about five to eight per Lesson; across a long Transcript's parts, mark only the main points of this part. Every other Question is `"detail"`: one part of a division, a condition explained in passing, and every practice question copied from the Interactive Review. Review Sessions introduce Core Questions first and Detail ones only when there is room.
+
+**Practice questions** (`origin: "interactive-review"`) are copied unchanged, so they are not split:
 
 - The prompt, every option and the answer exactly as the page wrote them, diacritics included. Do not fix, shorten, reorder or translate anything.
 - A question with options and one right option is `multiple-choice`, with all its options, however many there are.
@@ -78,14 +84,14 @@ Write a file such as `/tmp/questions-<lessonId>-<partIndex>.json`, shaped as `Ge
 - No `sourcePassage`.
 - If the page does not give a question's right answer, leave that question out rather than work the answer out yourself.
 
-**Concept Cards** (`origin: "concept-card"`): one Question per card.
+**Concept Cards** (`origin: "concept-card"`): one Question per card, and one per part of a division.
 
-- Ask, in Arabic, for what the card states: its definition, or its division (تقسيم) and the parts.
+- Ask, in Arabic, for what the card states: its definition, or its division (تقسيم) and the parts. A division's card also gets one Question per part, each with the card's text as its `sourcePassage`.
 - The answer comes only from the card's own words.
 - `sourcePassage` is the card's text, copied word for word with its diacritics.
 - Choose `open` for recalling a definition or the parts of a division; choose `multiple-choice` when recognising the right statement suits the point better. Wrong options must be clearly wrong by the card itself, and must not state anything as a ruling or fact.
 
-**The Transcript** (`origin: "transcript"`), when the request has `transcriptText`: one Question per key point of this part.
+**The Transcript** (`origin: "transcript"`), when the request has `transcriptText`: one Question per key point of this part, split into small Questions as above.
 
 - A key point is a definition, a division (تقسيم) and its parts, a ruling (حكم), a condition, or a piece of evidence (a verse or hadith the text cites for a point). Introductions, greetings, repetition and asides are not key points.
 - Write the prompt in Arabic, asking for exactly that point.

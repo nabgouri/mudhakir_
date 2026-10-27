@@ -86,8 +86,14 @@ export function toFirePayload(request: z.output<typeof GenerateRequest>): z.outp
 // keeps the passage it was drawn from, word for word.
 export const Origin = z.enum(['interactive-review', 'concept-card', 'transcript']);
 
+// A Core Question is on one of the Lesson's main points (a definition, a
+// division, a ruling or its evidence); any other is a Detail Question, which
+// Review Sessions introduce only after the Core ones (docs/adr/0003).
+export const Priority = z.enum(['core', 'detail']);
+
 const Common = {
   origin: Origin,
+  priority: Priority,
   prompt: Text,
   sourcePassage: Text.optional(),
 };
@@ -183,6 +189,7 @@ export function problemsWithOutput(
 export type QuestionRecord = {
   kind: 'multiple-choice' | 'open';
   origin: z.infer<typeof Origin>;
+  priority: z.infer<typeof Priority>;
   prompt: string;
   options: string[] | null;
   correct_option: number | null;
@@ -199,6 +206,7 @@ function stored(text: string): string {
 export function toQuestionRecord(q: z.infer<typeof GeneratedQuestion>): QuestionRecord {
   const base = {
     origin: q.origin,
+    priority: q.priority,
     prompt: stored(q.prompt),
     source_passage: q.sourcePassage === undefined ? null : stored(q.sourcePassage),
   };

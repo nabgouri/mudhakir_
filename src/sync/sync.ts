@@ -71,6 +71,7 @@ const TABLES: Table[] = [
       part_index: 'value',
       kind: 'value',
       origin: 'value',
+      priority: 'value',
       prompt: 'value',
       options: 'json',
       correct_option: 'value',

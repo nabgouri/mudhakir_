@@ -5,6 +5,7 @@
     {
       "kind": "open",
       "origin": "concept-card",
+      "priority": "core",
       "prompt": "ما تعريف الطَّهارة لغةً؟",
       "answer": "النَّظافة والنَّزاهة عن الأقذار.",
       "sourcePassage": "الطَّهارة لغةً: النَّظافة والنَّزاهة عن الأقذار."
@@ -12,14 +13,20 @@
     {
       "kind": "multiple-choice",
       "origin": "concept-card",
+      "priority": "core",
       "prompt": "إلى كم قسمٍ تنقسم المياه عند جمهور الفقهاء؟",
-      "options": ["قسمين: طهور ونجس", "ثلاثة أقسام: طهور وطاهر ونجس", "أربعة أقسام"],
+      "options": [
+        "قسمين: طهور ونجس",
+        "ثلاثة أقسام: طهور وطاهر ونجس",
+        "أربعة أقسام"
+      ],
       "correctOption": 1,
       "sourcePassage": "تنقسم المياه عند جمهور الفقهاء إلى ثلاثة أقسام: طَهُورٌ، وطاهِرٌ، ونَجِسٌ."
     },
     {
       "kind": "multiple-choice",
       "origin": "interactive-review",
+      "priority": "detail",
       "prompt": "أيُّ المياه الآتية يرفع الحدث ويزيل النجس؟",
       "options": [
         "الماء المستعمل في رفع حدث",
@@ -34,12 +41,14 @@
     {
       "kind": "open",
       "origin": "interactive-review",
+      "priority": "detail",
       "prompt": "صح أم خطأ: الماء الطَّهور هو الباقي على خِلقته.",
       "answer": "صح"
     },
     {
       "kind": "open",
       "origin": "interactive-review",
+      "priority": "detail",
       "prompt": "صِلْ كلَّ قسمٍ بحكمه: (١) الطَّهور (٢) النَّجِس — (أ) لا يجوز استعماله (ب) يرفع الحدث ويزيل الخبث",
       "answer": "(١) ← (ب)، (٢) ← (أ)"
     }

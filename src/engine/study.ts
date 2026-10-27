@@ -17,26 +17,29 @@ export type QuestionState = {
   lapses: number;
   phase: 'learning' | 'review' | 'relearning';
   lastReview: number;
-  // When the Question was first reviewed: the day it counts against the
-  // daily new-Question limit.
+  // When the Question was first reviewed.
   firstReview: number;
 };
+
+export type Priority = 'core' | 'detail';
 
 export type StudyQuestion = {
   id: string;
   subjectId: string;
-  // Orders new Questions: the earliest added is introduced first.
+  // The Lesson's number in its Subject: the highest is the newest Lesson.
+  lessonNumber: number;
+  priority: Priority;
+  // Orders a Lesson's new Questions: the earliest added is introduced first.
   createdAt: number;
   state: QuestionState | null;
 };
 
 export type Filter = { subjectId?: string };
 
-// From the student's settings; the default until a settings screen exists.
-export type Limits = { newPerDay?: number };
-
-export const DEFAULT_NEW_PER_DAY = 10;
-export const DEFAULT_SESSION_SIZE = 5;
+export const DEFAULT_SESSION_SIZE = 6;
+// The most new Questions one Review Session introduces, so a quiet day can't
+// load the following weeks with more reviews than sessions can hold.
+export const NEW_PER_SESSION = 3;
 
 // Any step is shorter than the gap between two prayers, so a step means "at
 // the next Reminder". A new Question keeps one step, for Again and Hard; Good
@@ -124,59 +127,71 @@ export function ratingForChoice(correct: boolean): Rating {
   return correct ? 'good' : 'again';
 }
 
-function startOfDay(now: Date): number {
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+// The same Questions, taking turns between Subjects: each Subject keeps its
+// own order, and Subjects take turns in the order they first appear.
+function alternateSubjects(questions: readonly StudyQuestion[]): StudyQuestion[] {
+  const queues = new Map<string, StudyQuestion[]>();
+  for (const q of questions) {
+    const queue = queues.get(q.subjectId);
+    if (queue) queue.push(q);
+    else queues.set(q.subjectId, [q]);
+  }
+  const result: StudyQuestion[] = [];
+  while (result.length < questions.length) {
+    for (const queue of queues.values()) {
+      const next = queue.shift();
+      if (next) result.push(next);
+    }
+  }
+  return result;
 }
 
-// The Questions due at `now`, in the order to ask them: Questions already
-// reviewed, most overdue first, then new Questions, earliest added first.
-// New Questions are capped so that at most `newPerDay` are first reviewed on
-// one calendar day (the phone's local day), counted across all Subjects.
-// Only the Questions passed in count, so a deleted Question introduced today
-// frees its place; deleting is deliberate, so that is accepted.
-export function due(
-  questions: readonly StudyQuestion[],
-  now: Date,
-  filter: Filter = {},
-  { newPerDay = DEFAULT_NEW_PER_DAY }: Limits = {},
-): StudyQuestion[] {
-  const today = startOfDay(now);
-  const introducedToday = questions.filter((q) => q.state !== null && q.state.firstReview >= today).length;
-  const inFilter = questions.filter((q) => filter.subjectId === undefined || q.subjectId === filter.subjectId);
+// The order new Questions are introduced in
+// (docs/adr/0003-new-questions-fill-only-free-review-places.md): the Core
+// Questions of each Subject's newest Lesson, then older Lessons' Core
+// Questions, oldest Lesson first, then Detail Questions, oldest Lesson first.
+// Within a Lesson they keep the order they were added in, and within each
+// step the Subjects take turns. The newest Lesson is the newest of all the
+// Subject's Questions, seen or not, so once its Core Questions are all
+// introduced, older Lessons come next, oldest first.
+function newOrder(fresh: readonly StudyQuestion[], all: readonly StudyQuestion[]): StudyQuestion[] {
+  const newest = new Map<string, number>();
+  for (const q of all) newest.set(q.subjectId, Math.max(newest.get(q.subjectId) ?? 0, q.lessonNumber));
+  const step = (q: StudyQuestion) => (q.priority === 'detail' ? 2 : q.lessonNumber === newest.get(q.subjectId) ? 0 : 1);
+  const sorted = [...fresh].sort((a, b) => a.lessonNumber - b.lessonNumber || a.createdAt - b.createdAt);
+  return [0, 1, 2].flatMap((n) => alternateSubjects(sorted.filter((q) => step(q) === n)));
+}
 
+// The Questions a Review Session could ask at `now`, in the order to ask
+// them: Questions already reviewed, most overdue first, then at most
+// `NEW_PER_SESSION` new Questions, taking turns between Subjects.
+export function due(questions: readonly StudyQuestion[], now: Date, filter: Filter = {}): StudyQuestion[] {
+  const inFilter = questions.filter((q) => filter.subjectId === undefined || q.subjectId === filter.subjectId);
   const reviewed = inFilter
     .filter((q) => q.state !== null && q.state.due <= now.getTime())
     .sort((a, b) => a.state!.due - b.state!.due);
-  const fresh = inFilter
-    .filter((q) => q.state === null)
-    .sort((a, b) => a.createdAt - b.createdAt)
-    .slice(0, Math.max(0, newPerDay - introducedToday));
-
-  return [...reviewed, ...fresh];
+  const fresh = newOrder(inFilter.filter((q) => q.state === null), questions);
+  return [...reviewed, ...fresh.slice(0, NEW_PER_SESSION)];
 }
 
-// The Questions for one Review Session.
+// The Questions for one Review Session. New Questions only fill the places
+// the due reviews leave free, and the session takes turns between Subjects.
 export function nextSession(
   questions: readonly StudyQuestion[],
   now: Date,
   size: number = DEFAULT_SESSION_SIZE,
   filter: Filter = {},
-  limits: Limits = {},
 ): StudyQuestion[] {
-  return due(questions, now, filter, limits).slice(0, size);
+  return alternateSubjects(due(questions, now, filter).slice(0, size));
 }
 
 // How many Questions a Review Session for each Subject could ask now. The
-// daily new-Question limit is shared, so the counts can add up to more than
-// one day introduces.
-export function dueCountsBySubject(
-  questions: readonly StudyQuestion[],
-  now: Date,
-  limits: Limits = {},
-): Map<string, number> {
+// new-Question limit is per session, so the counts can add up to more than
+// one session introduces.
+export function dueCountsBySubject(questions: readonly StudyQuestion[], now: Date): Map<string, number> {
   const counts = new Map<string, number>();
   for (const subjectId of new Set(questions.map((q) => q.subjectId))) {
-    counts.set(subjectId, due(questions, now, { subjectId }, limits).length);
+    counts.set(subjectId, due(questions, now, { subjectId }).length);
   }
   return counts;
 }

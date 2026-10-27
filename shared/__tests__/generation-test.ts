@@ -50,12 +50,20 @@ describe('GeneratedQuestions', () => {
       questions.push({
         kind: 'open',
         origin: 'transcript',
+        priority: 'core',
         prompt: 'ما حكم الوضوء بالماء المتغيِّر بطول المُكث؟',
         answer: 'يجوز، لأنه لم يخرج عن اسم الماء المطلق.',
         sourcePassage: 'والماءُ المتغيِّرُ بطول المُكث طَهورٌ، لأنه لم يخرج عن اسم الماء المطلق.',
       });
     });
     expect(GeneratedQuestions.safeParse(output).success).toBe(true);
+  });
+
+  test('a Question must say whether it is Core or Detail', () => {
+    const output = outputWith((questions) => {
+      delete questions[0].priority;
+    });
+    expect(GeneratedQuestions.safeParse(output).success).toBe(false);
   });
 
   test.each<[string, (questions: Record<string, unknown>[]) => void]>([

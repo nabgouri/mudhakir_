@@ -1,7 +1,7 @@
 import { randomUUID } from 'expo-crypto';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import { rate, type QuestionState, type Rating, type StudyQuestion } from '@/engine/study';
+import { rate, type Priority, type QuestionState, type Rating, type StudyQuestion } from '@/engine/study';
 
 import { writeTransaction } from './database';
 import type { QuestionContent } from './input';
@@ -91,12 +91,22 @@ export async function deleteQuestion(db: SQLiteDatabase, id: string): Promise<vo
 
 // Every live Question with what the study engine needs to schedule it.
 export async function listStudyQuestions(db: SQLiteDatabase): Promise<StudyQuestion[]> {
-  const rows = await db.getAllAsync<{ id: string; subjectId: string; createdAt: number; schedule: string | null }>(
-    `SELECT q.id, l.subject_id AS subjectId, q.created_at AS createdAt, q.schedule ${FROM_LIVE_QUESTIONS}`,
+  const rows = await db.getAllAsync<{
+    id: string;
+    subjectId: string;
+    lessonNumber: number;
+    priority: Priority;
+    createdAt: number;
+    schedule: string | null;
+  }>(
+    `SELECT q.id, l.subject_id AS subjectId, l.number AS lessonNumber, q.priority, q.created_at AS createdAt, q.schedule
+    ${FROM_LIVE_QUESTIONS}`,
   );
   return rows.map((row) => ({
     id: row.id,
     subjectId: row.subjectId,
+    lessonNumber: row.lessonNumber,
+    priority: row.priority,
     createdAt: row.createdAt,
     state: parseSchedule(row.schedule),
   }));

@@ -24,7 +24,7 @@ const MARCH_5 = { from: at(0, 0), to: at(23, 59) };
 const MINUTE = 60 * 1000;
 
 // A new Question is due from the moment it is added.
-const NEW_QUESTION: StudyQuestion = { id: 'q', subjectId: 'fiqh', createdAt: 0, state: null };
+const NEW_QUESTION: StudyQuestion = { id: 'q', subjectId: 'fiqh', lessonNumber: 1, priority: 'core', createdAt: 0, state: null };
 const SOMETHING_DUE = [NEW_QUESTION];
 
 const prayers = (reminders: Reminder[]) => reminders.map((r) => r.prayer);
