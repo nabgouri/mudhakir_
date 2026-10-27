@@ -11,8 +11,24 @@ A course of study at the ma'had, such as Fiqh, Aqeedah or Muojaz, made up of num
 _Avoid_: Course, book, category
 
 **Lesson** (درس):
-One numbered class within a Subject, together with the material the student adds for it.
+One numbered class within a Subject, together with the material the student adds for it or the Channel Reader imports.
 _Avoid_: Lecture, class, session
+
+**Lesson Title**:
+The name the ma'had gives a Lesson, taken from the caption of its audio post, such as «الشرك الأكبر المنافي لتوحيد الألوهية».
+_Avoid_: Topic, heading
+
+**Ma'had Channel**:
+The ma'had's Telegram channel, where each Lesson is posted as its audio, its Transcript PDF and its Interactive Review link, all tagged with the Subject's hashtag.
+_Avoid_: Group, chat
+
+**Supplement** (المواد الإثرائية):
+Extra reading the Ma'had Channel posts under `#المواد_الإثرائية`; it is not a Lesson and never becomes Questions.
+_Avoid_: Bonus lesson
+
+**Channel Reader**:
+The scheduled script that checks the Ma'had Channel every hour and sends each new Lesson to question generation. It is plain code; it uses no AI.
+_Avoid_: Bot, agent, scraper
 
 **Transcript** (تفريغ):
 The ma'had's PDF write-up of a Lesson's audio, containing the full detailed explanation.
@@ -38,6 +54,14 @@ _Avoid_: Card, quiz item
 **Source Passage**:
 The short quotation from a Transcript, or the text of a Concept Card, that a generated Question was drawn from, shown with its answer.
 _Avoid_: Reference, citation
+
+**Core Question**:
+A Question on one of a Lesson's main points: a definition, a division (تقسيم), a ruling (حكم) or its evidence. A Lesson has about five to eight; they are introduced before Detail Questions.
+_Avoid_: Important question, key question
+
+**Detail Question**:
+Any Question that is not a Core Question, such as one part of a division or a condition explained in passing. It is introduced only when Review Sessions have room.
+_Avoid_: Minor question, extra question
 
 **Multiple-Choice Question**:
 A Question answered by picking one option, graded automatically.
@@ -72,3 +96,6 @@ _Avoid_: Alert, push
 - A **Question** has many **Reviews** over time; each **Review** has one **Rating**
 - A **Question** generated from a **Transcript** or a **Concept Card** has one **Source Passage**; a **Question** copied from an **Interactive Review**'s practice questions has none
 - A **Reminder** opens one **Review Session** of a few due **Questions**
+- A **Lesson** has at most one **Lesson Title**
+- Each **Question** is either a **Core Question** or a **Detail Question**
+- The **Channel Reader** reads one **Ma'had Channel**; each **Subject** there has its own hashtag, and **Supplements** are skipped

@@ -34,6 +34,17 @@ describe('rate', () => {
     expect(state.due).toBeLessThanOrEqual(ASR.getTime());
   });
 
+  test('a new Question rated Hard after Dhuhr is due again by Asr, the same day', () => {
+    const state = rate(null, 'hard', DHUHR);
+    expect(state.due).toBeLessThanOrEqual(ASR.getTime());
+  });
+
+  test.each<Rating>(['good', 'easy'])('a new Question rated %s is not asked again the same day', (rating) => {
+    const state = rate(null, rating, DHUHR);
+    expect(state.due).toBeGreaterThanOrEqual(at(0, 0, 1).getTime());
+    expect(state.phase).toBe('review');
+  });
+
   test('a well-known Question rated Again comes back within hours, the same day', () => {
     const known = reviewSeries(['good', 'good', 'good', 'good'], at(6)).at(-1)!;
     const reviewedAt = new Date(known.due);
