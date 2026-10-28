@@ -6,7 +6,7 @@ The Channel Reader is a plain script, with no AI, logged in to the student's own
 
 A post counts as a Lesson only when it has a Subject hashtag and either a numbered PDF or an Interactive Review link. The Lesson number comes from the link's path and is checked against the PDF's name. If the two disagree, the Lesson is skipped and the student is notified. `#المواد_الإثرائية` (Supplements) and the audio are skipped. A Subject and number already in the app is never imported again. Edits to a post after its import are ignored; the student deletes the Lesson to have it imported again. A new hashtag creates a new Subject. The first run imports every past Lesson.
 
-The script runs first as a scheduled Supabase Edge Function using mtcute (`jsr:@mtcute/deno`) with the session in a function secret. Downloading and extracting are separate calls, to stay under the 2 s CPU limit. If a spike shows Telegram can't be reached from there, or the limits are hit, it runs as a scheduled GitHub Actions workflow instead.
+The script runs as a scheduled Supabase Edge Function using mtcute's web build (`jsr:@mtcute/web`), which reaches Telegram over WebSocket, with the session in a function secret. mtcute's Deno build can't be used there, because it imports `node:sqlite`, which Edge Functions don't have. A spike (`read-channel`) signed in, read the channel's last 40 posts and downloaded a 2 MB Transcript PDF in 3.5 s. GitHub Actions remains the fallback if the limits are ever hit.
 
 ## Considered Options
 

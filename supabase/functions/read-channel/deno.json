@@ -1,0 +1,9 @@
+{
+  "imports": {
+    "@mtcute/web": "jsr:@mtcute/web@0.32.3",
+    "jsr:@mtcute/core@^0.32.3": "jsr:@mtcute/core@0.32.3",
+    "jsr:@mtcute/core@^0.32.3/": "jsr:@mtcute/core@0.32.3/",
+    "jsr:@mtcute/html-parser@^0.32.3": "jsr:@mtcute/html-parser@0.32.3",
+    "jsr:@mtcute/markdown-parser@^0.32.3": "jsr:@mtcute/markdown-parser@0.32.3"
+  }
+}
