@@ -37,7 +37,9 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { MemoryStorage, TelegramClient, WebPlatform, type Chat, type Message } from '@mtcute/web';
 
 // Loading pdf.js's worker build first sets `globalThis.pdfjsWorker`, so
-// pdf.js parses here without a worker, as on the phone.
+// pdf.js parses here without a worker, as on the phone. The files are the
+// phone's pdfjs-dist ones, loaded by URL (deno.json): through `npm:`, the
+// bundler also pulls its optional native canvas package and the deploy fails.
 import 'pdfjs-dist/legacy/build/pdf.worker.min.mjs';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.min.mjs';
 
