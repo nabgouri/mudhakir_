@@ -157,6 +157,8 @@ export default function SubjectLessonsScreen() {
             <Link href={{ pathname: '/lessons/[lessonId]', params: { lessonId: item.id } }} asChild>
               <Pressable style={styles.spacer}>
                 <Text style={styles.name}>{t.lesson(item.number)}</Text>
+                {item.title !== null && <Text style={styles.meta}>{item.title}</Text>}
+                {item.studiedAt === null && <Text style={styles.meta}>{t.notStudied}</Text>}
                 {item.generationStatus !== null && (
                   <Text style={item.generationStatus === 'failed' ? styles.failed : styles.meta}>
                     {t.generationStatus[item.generationStatus]}

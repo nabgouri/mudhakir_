@@ -1,7 +1,7 @@
 import { CryptoDigestAlgorithm, digestStringAsync, randomUUID } from 'expo-crypto';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import { splitTranscript, transcriptRoom } from '../../shared/transcript';
+import { lessonTranscriptParts } from '../../shared/transcript';
 
 import { saveIfUnique, writeTransaction, type SaveResult } from './database';
 
@@ -14,6 +14,10 @@ export type Lesson = {
   id: string;
   subjectId: string;
   number: number;
+  // The Lesson Title, for a Lesson imported from the Ma'had Channel.
+  title: string | null;
+  // When the student studied it; null until they react to it in the channel.
+  studiedAt: number | null;
   interactiveReviewUrl: string | null;
   // The SHA-256 of each part's Transcript text; empty without a Transcript.
   transcriptDigests: string[];
@@ -33,7 +37,7 @@ type LessonRow = Omit<Lesson, 'transcriptDigests' | 'partsDone' | 'failedParts'>
 };
 
 function lessonColumns(table = 'lessons') {
-  return `${table}.id, ${table}.subject_id AS subjectId, ${table}.number,
+  return `${table}.id, ${table}.subject_id AS subjectId, ${table}.number, ${table}.title, ${table}.studied_at AS studiedAt,
     ${table}.interactive_review_url AS interactiveReviewUrl, ${table}.transcript_digests AS transcriptDigests,
     ${table}.generation_status AS generationStatus, ${table}.error AS generationError,
     ${table}.part_count AS partCount, ${table}.parts_done AS partsDone, ${table}.failed_parts AS failedParts,
@@ -60,25 +64,6 @@ export async function listLessons(db: SQLiteDatabase, subjectId: string): Promis
   return rows.map(lessonFromRow);
 }
 
-// Room kept in each part's request for the Subject's name, which is read
-// when the part is sent, so splitting doesn't depend on it: renaming the
-// Subject later splits a re-attached Transcript the same way.
-const SUBJECT_NAME_ROOM = 500;
-
-// A Lesson's Transcript text in the parts it is sent in (shared/transcript.ts).
-// The same text always splits into the same parts.
-export function lessonTranscriptParts(
-  lesson: { id: string; number: number; interactiveReviewUrl: string | null },
-  transcriptText: string,
-): string[] {
-  const room = transcriptRoom({
-    lessonId: lesson.id,
-    subjectName: '',
-    lessonNumber: lesson.number,
-    interactiveReviewUrl: lesson.interactiveReviewUrl ?? undefined,
-  });
-  return splitTranscript(transcriptText, room - SUBJECT_NAME_ROOM);
-}
 
 // What `transcript_digests` holds for a part: the SHA-256 of its text as
 // UTF-8, in hex, as the routine's write script computes it.
@@ -116,9 +101,10 @@ export async function addLesson(
       )) !== null,
     async (tx) => {
       await tx.runAsync(
+        // Added by hand, so studied now.
         `INSERT INTO lessons (id, subject_id, number, interactive_review_url, transcript_digests, generation_status,
-           part_count, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           part_count, studied_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         id,
         subjectId,
         number,
@@ -126,6 +112,7 @@ export async function addLesson(
         JSON.stringify(digests),
         partCount === 0 ? null : 'waiting',
         partCount,
+        now,
         now,
         now,
       );

@@ -2,8 +2,6 @@
 
 The Channel Reader imports each new Lesson from the Ma'had Channel on Telegram (see [`docs/adr/0002-lessons-imported-from-the-mahad-channel-by-a-script.md`](adr/0002-lessons-imported-from-the-mahad-channel-by-a-script.md)). It signs in as the student's own Telegram account, so this is done once, by hand, by the student.
 
-For now only the spike exists: `read-channel` reads the channel and downloads one PDF, to show that this works on Supabase. It stores nothing.
-
 The secrets involved give full control of the student's Telegram account. They go only into Supabase's Edge Function secrets, never into the app, this repo or a chat.
 
 ## 1. Get an api_id and api_hash
@@ -40,10 +38,23 @@ In PowerShell or cmd, `~` isn't expanded, so write the full path, such as `"C:\U
 
 Then delete `mudhakir-telegram.env`.
 
-## 4. Deploy and test the spike
+## 4. Deploy the reader
 
 ```bash
-npx supabase functions deploy read-channel
+npx supabase db push                                  # lessons.title, studied_at, the reader's tables and hourly job
+npx supabase functions deploy channel-reader generate-lesson
 ```
 
-In the Supabase dashboard, open **Edge Functions → read-channel → Test**, choose the **service role**, and send a POST with an empty body. The answer lists the channel's latest posts, the newest PDF it downloaded, and how long each step took. A `403` means the call was not made as the service role.
+The hourly job (pg_cron, at 7 minutes past) does nothing until Vault holds the reader's address, so the reader is still off.
+
+## 5. Update the app, then switch the reader on
+
+Install an app build with this change first: an older app doesn't know which Lessons are unstudied and would ask their Questions. Then, in the Supabase dashboard's **SQL Editor**:
+
+```sql
+select vault.create_secret('https://<project-ref>.supabase.co/functions/v1/channel-reader', 'channel_reader_url');
+```
+
+From the next hour on, the reader imports the channel's Lessons, oldest first, one per call; the first run catches up on every past Lesson within minutes. They arrive **unstudied** («لم يُدرس بعد»): react to any post of the last Lesson you've studied in each Subject, and within the hour it and every earlier Lesson of that Subject become studied, and their Questions start coming.
+
+To see what the last run did, read `channel_reader_state` in the **Table Editor**: `last_run_at`, `last_error`, and `problems`, the posts it could not read as Lessons. To switch the reader off, delete the `channel_reader_url` secret in **Vault**.

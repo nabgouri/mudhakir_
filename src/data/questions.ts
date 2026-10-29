@@ -96,10 +96,12 @@ export async function listStudyQuestions(db: SQLiteDatabase): Promise<StudyQuest
     subjectId: string;
     lessonNumber: number;
     priority: Priority;
+    studied: number;
     createdAt: number;
     schedule: string | null;
   }>(
-    `SELECT q.id, l.subject_id AS subjectId, l.number AS lessonNumber, q.priority, q.created_at AS createdAt, q.schedule
+    `SELECT q.id, l.subject_id AS subjectId, l.number AS lessonNumber, q.priority,
+      l.studied_at IS NOT NULL AS studied, q.created_at AS createdAt, q.schedule
     ${FROM_LIVE_QUESTIONS}`,
   );
   return rows.map((row) => ({
@@ -107,6 +109,7 @@ export async function listStudyQuestions(db: SQLiteDatabase): Promise<StudyQuest
     subjectId: row.subjectId,
     lessonNumber: row.lessonNumber,
     priority: row.priority,
+    studied: row.studied === 1,
     createdAt: row.createdAt,
     state: parseSchedule(row.schedule),
   }));

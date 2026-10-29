@@ -22,7 +22,7 @@ const ASR = at(15, 45);
 const HOUR = 60 * 60 * 1000;
 
 function question(id: string, overrides: Partial<StudyQuestion> = {}): StudyQuestion {
-  return { id, subjectId: 'fiqh', lessonNumber: 1, priority: 'core', createdAt: 0, state: null, ...overrides };
+  return { id, subjectId: 'fiqh', lessonNumber: 1, priority: 'core', studied: true, createdAt: 0, state: null, ...overrides };
 }
 
 // The state after a series of Reviews, each made as soon as the previous
@@ -166,6 +166,28 @@ describe('due', () => {
       question('l1-core', { lessonNumber: 1, createdAt: 2 }),
     ];
     expect(due(questions, ASR).map((q) => q.id)).toEqual(['l1-core', 'l2-core']);
+  });
+
+  test('new Questions of a Lesson not yet studied are not introduced', () => {
+    const questions = [
+      question('studied', { lessonNumber: 13, createdAt: 1 }),
+      question('not-studied', { lessonNumber: 14, studied: false, createdAt: 2 }),
+    ];
+    expect(due(questions, ASR).map((q) => q.id)).toEqual(['studied']);
+  });
+
+  test('a reviewed Question still comes back if its Lesson is marked not studied', () => {
+    const questions = [question('seen', { studied: false, state: reviewedState(at(9)) })];
+    expect(due(questions, ASR).map((q) => q.id)).toEqual(['seen']);
+  });
+
+  test('the newest studied Lesson counts as newest, not a newer one not yet studied', () => {
+    const questions = [
+      question('l12-core', { lessonNumber: 12, createdAt: 1 }),
+      question('l13-core', { lessonNumber: 13, createdAt: 2 }),
+      question('l14-core', { lessonNumber: 14, studied: false, createdAt: 3 }),
+    ];
+    expect(due(questions, ASR).map((q) => q.id)).toEqual(['l13-core', 'l12-core']);
   });
 
   test('each Subject’s newest Lesson counts as newest, and the Subjects take turns', () => {

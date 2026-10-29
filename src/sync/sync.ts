@@ -50,6 +50,8 @@ const TABLES: Table[] = [
       id: 'value',
       subject_id: 'value',
       number: 'value',
+      title: 'value',
+      studied_at: 'time',
       interactive_review_url: 'value',
       transcript_digests: 'json',
       generation_status: 'value',

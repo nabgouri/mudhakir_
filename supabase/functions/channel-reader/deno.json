@@ -1,0 +1,11 @@
+{
+  "imports": {
+    "zod": "npm:zod@~4.6.5",
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@~2.117.2",
+    "@mtcute/web": "jsr:@mtcute/web@0.32.3",
+    "jsr:@mtcute/core@^0.32.3": "jsr:@mtcute/core@0.32.3",
+    "jsr:@mtcute/core@^0.32.3/": "jsr:@mtcute/core@0.32.3/",
+    "pdfjs-dist/legacy/build/pdf.min.mjs": "npm:pdfjs-dist@6.4.299/legacy/build/pdf.min.mjs",
+    "pdfjs-dist/legacy/build/pdf.worker.min.mjs": "npm:pdfjs-dist@6.4.299/legacy/build/pdf.worker.min.mjs"
+  }
+}

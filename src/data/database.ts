@@ -161,6 +161,14 @@ const MIGRATIONS: string[] = [
   `
   ALTER TABLE questions ADD COLUMN priority TEXT NOT NULL DEFAULT 'core' CHECK (priority IN ('core', 'detail'));
   `,
+  // The Lesson Title of a Lesson the Channel Reader imported, and when the
+  // student studied the Lesson, null until then (docs/adr/0002), as in the
+  // cloud's `lessons`. Lessons already here were added by hand: studied.
+  `
+  ALTER TABLE lessons ADD COLUMN title TEXT;
+  ALTER TABLE lessons ADD COLUMN studied_at INTEGER;
+  UPDATE lessons SET studied_at = created_at;
+  `,
 ];
 
 export async function migrate(db: SQLiteDatabase): Promise<void> {

@@ -3,7 +3,7 @@
 // (shared/generation.ts), so every part must leave room in the serialized
 // request for the request's other fields.
 
-import { MAX_REQUEST_TEXT, type GenerateRequestInput } from './generation';
+import { MAX_REQUEST_TEXT, type GenerateRequestInput } from './generation.ts';
 
 const PARAGRAPH_BREAK = '\n\n';
 
@@ -89,4 +89,25 @@ export function splitTranscript(text: string, limit: number): string[] {
   }
   if (current.length > 0) parts.push(current.join(PARAGRAPH_BREAK));
   return parts;
+}
+
+// Room kept in each part's request for the Subject's name, which is read
+// when the part is sent, so splitting doesn't depend on it: renaming the
+// Subject later splits a re-attached Transcript the same way.
+const SUBJECT_NAME_ROOM = 500;
+
+// A Lesson's Transcript text in the parts it is sent in (`splitTranscript`).
+// The same text always splits into the same parts, on the phone and in the
+// Channel Reader, so their digests match.
+export function lessonTranscriptParts(
+  lesson: { id: string; number: number; interactiveReviewUrl: string | null },
+  transcriptText: string,
+): string[] {
+  const room = transcriptRoom({
+    lessonId: lesson.id,
+    subjectName: '',
+    lessonNumber: lesson.number,
+    interactiveReviewUrl: lesson.interactiveReviewUrl ?? undefined,
+  });
+  return splitTranscript(transcriptText, room - SUBJECT_NAME_ROOM);
 }

@@ -22,9 +22,8 @@
 import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 
-import { GenerateRequest, toFirePayload } from '../../../shared/generation.ts';
-
-const FIRE_URL = 'https://api.anthropic.com/v1/claude_code/routines';
+import { GenerateRequest } from '../../../shared/generation.ts';
+import { sendPart } from '../_shared/send-part.ts';
 
 function reply(status: number, body: Record<string, unknown>): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -34,20 +33,6 @@ function env(name: string): string {
   const value = Deno.env.get(name);
   if (!value) throw new Error(`The ${name} secret is not set`);
   return value;
-}
-
-async function fireRoutine(request: z.infer<typeof GenerateRequest>): Promise<{ ok: true } | { ok: false; status: number; detail: string }> {
-  const response = await fetch(`${FIRE_URL}/${env('ROUTINE_ID')}/fire`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${env('ROUTINE_TOKEN')}`,
-      'anthropic-version': '2023-06-01',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ text: JSON.stringify(toFirePayload(request)) }),
-  });
-  if (response.ok) return { ok: true };
-  return { ok: false, status: response.status, detail: await response.text() };
 }
 
 Deno.serve(async (req) => {
@@ -76,44 +61,17 @@ Deno.serve(async (req) => {
   if (!parsed.success) return reply(400, { error: z.prettifyError(parsed.error) });
   const request = parsed.data;
 
-  const { data: start, error: startError } = await supabase.rpc('start_lesson_part', {
-    p_lesson_id: request.lessonId,
-    p_part_index: request.partIndex,
-    p_part_count: request.partCount,
+  const result = await sendPart(supabase, request, async (text) => {
+    const { error } = await supabase.rpc('stash_part_text', {
+      p_lesson_id: request.lessonId,
+      p_part_index: request.partIndex,
+      p_text: text,
+    });
+    return error?.message ?? null;
   });
-  if (startError) return reply(500, { error: startError.message });
-  if (start === null) return reply(404, { error: 'No such Lesson' });
-  if (start !== 'fire') return reply(200, { status: start === 'done' ? 'already-done' : 'already-sent' });
-
-  // The part back to not sent (which also drops its kept text), so the phone
-  // sends it again on a later sync.
-  async function unstart() {
-    const { error: unstartError } = await supabase.rpc('unstart_lesson_part', {
-      p_lesson_id: request.lessonId,
-      p_part_index: request.partIndex,
-    });
-    if (unstartError) console.error('Taking the part back to not sent failed', unstartError);
-  }
-
-  if (request.transcriptText !== undefined) {
-    const { error: stashError } = await supabase.rpc('stash_part_text', {
-      p_lesson_id: request.lessonId,
-      p_part_index: request.partIndex,
-      p_text: request.transcriptText,
-    });
-    if (stashError) {
-      console.error('Keeping the Transcript text failed', stashError);
-      await unstart();
-      return reply(500, { error: stashError.message });
-    }
-  }
-
-  const fired = await fireRoutine(request).catch((error: Error) => ({ ok: false as const, status: 0, detail: error.message }));
-  if (!fired.ok) {
-    console.error('Firing the routine failed', fired.status, fired.detail);
-    await unstart();
-    // 429: an hourly fire limit; the phone tries again on a later sync.
-    return reply(fired.status === 429 ? 429 : 502, { error: 'The routine could not be started' });
-  }
-  return reply(200, { status: 'generating' });
+  if (result.status === 'no-lesson') return reply(404, { error: 'No such Lesson' });
+  // A failed part is back to not sent, so the phone sends it again on a
+  // later sync.
+  if (result.status === 'failed') return reply(result.httpStatus, { error: result.error });
+  return reply(200, { status: result.status });
 });

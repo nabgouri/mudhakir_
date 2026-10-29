@@ -14,6 +14,10 @@ _Avoid_: Course, book, category
 One numbered class within a Subject, together with the material the student adds for it or the Channel Reader imports.
 _Avoid_: Lecture, class, session
 
+**Studied Lesson**:
+A Lesson the student has studied: added by hand, or reacted to in the Ma'had Channel. Only a Studied Lesson's new Questions are introduced into Review Sessions.
+_Avoid_: Read, done, completed
+
 **Lesson Title**:
 The name the ma'had gives a Lesson, taken from the caption of its audio post, such as «الشرك الأكبر المنافي لتوحيد الألوهية».
 _Avoid_: Topic, heading
@@ -97,5 +101,6 @@ _Avoid_: Alert, push
 - A **Question** generated from a **Transcript** or a **Concept Card** has one **Source Passage**; a **Question** copied from an **Interactive Review**'s practice questions has none
 - A **Reminder** opens one **Review Session** of a few due **Questions**
 - A **Lesson** has at most one **Lesson Title**
+- A **Lesson** imported by the **Channel Reader** is not a **Studied Lesson** until the student reacts to one of its posts, which also makes every earlier **Lesson** of its **Subject** studied
 - Each **Question** is either a **Core Question** or a **Detail Question**
 - The **Channel Reader** reads one **Ma'had Channel**; each **Subject** there has its own hashtag, and **Supplements** are skipped

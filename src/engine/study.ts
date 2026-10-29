@@ -29,6 +29,9 @@ export type StudyQuestion = {
   // The Lesson's number in its Subject: the highest is the newest Lesson.
   lessonNumber: number;
   priority: Priority;
+  // Whether the student has studied the Lesson. Until then its new
+  // Questions are not introduced (docs/adr/0002).
+  studied: boolean;
   // Orders a Lesson's new Questions: the earliest added is introduced first.
   createdAt: number;
   state: QuestionState | null;
@@ -151,12 +154,12 @@ function alternateSubjects(questions: readonly StudyQuestion[]): StudyQuestion[]
 // Questions of each Subject's newest Lesson, then older Lessons' Core
 // Questions, oldest Lesson first, then Detail Questions, oldest Lesson first.
 // Within a Lesson they keep the order they were added in, and within each
-// step the Subjects take turns. The newest Lesson is the newest of all the
-// Subject's Questions, seen or not, so once its Core Questions are all
-// introduced, older Lessons come next, oldest first.
+// step the Subjects take turns. The newest Lesson is the newest studied one
+// of all the Subject's Questions, seen or not, so once its Core Questions are
+// all introduced, older Lessons come next, oldest first.
 function newOrder(fresh: readonly StudyQuestion[], all: readonly StudyQuestion[]): StudyQuestion[] {
   const newest = new Map<string, number>();
-  for (const q of all) newest.set(q.subjectId, Math.max(newest.get(q.subjectId) ?? 0, q.lessonNumber));
+  for (const q of all.filter((q) => q.studied)) newest.set(q.subjectId, Math.max(newest.get(q.subjectId) ?? 0, q.lessonNumber));
   const step = (q: StudyQuestion) => (q.priority === 'detail' ? 2 : q.lessonNumber === newest.get(q.subjectId) ? 0 : 1);
   const sorted = [...fresh].sort((a, b) => a.lessonNumber - b.lessonNumber || a.createdAt - b.createdAt);
   return [0, 1, 2].flatMap((n) => alternateSubjects(sorted.filter((q) => step(q) === n)));
@@ -164,13 +167,14 @@ function newOrder(fresh: readonly StudyQuestion[], all: readonly StudyQuestion[]
 
 // The Questions a Review Session could ask at `now`, in the order to ask
 // them: Questions already reviewed, most overdue first, then at most
-// `NEW_PER_SESSION` new Questions, taking turns between Subjects.
+// `NEW_PER_SESSION` new Questions of studied Lessons, taking turns between
+// Subjects.
 export function due(questions: readonly StudyQuestion[], now: Date, filter: Filter = {}): StudyQuestion[] {
   const inFilter = questions.filter((q) => filter.subjectId === undefined || q.subjectId === filter.subjectId);
   const reviewed = inFilter
     .filter((q) => q.state !== null && q.state.due <= now.getTime())
     .sort((a, b) => a.state!.due - b.state!.due);
-  const fresh = newOrder(inFilter.filter((q) => q.state === null), questions);
+  const fresh = newOrder(inFilter.filter((q) => q.state === null && q.studied), questions);
   return [...reviewed, ...fresh.slice(0, NEW_PER_SESSION)];
 }
 

@@ -78,6 +78,13 @@ export default function LessonQuestionsScreen() {
         contentContainerStyle={styles.list}
         ListHeaderComponent={
           <>
+            {lesson?.title != null && <Text style={styles.lessonTitle}>{lesson.title}</Text>}
+            {lesson != null && lesson.studiedAt === null && (
+              <View style={styles.card}>
+                <Text style={styles.status}>{t.notStudied}</Text>
+                <Text style={styles.meta}>{t.notStudiedHint}</Text>
+              </View>
+            )}
             {lesson?.generationStatus != null && (
               <View style={styles.card}>
                 <Text style={lesson.generationStatus === 'failed' ? styles.failed : styles.status}>
@@ -167,6 +174,11 @@ const styles = StyleSheet.create({
   prompt: {
     fontSize: 20,
     lineHeight: 36,
+  },
+  lessonTitle: {
+    fontSize: 20,
+    lineHeight: 36,
+    marginBottom: space.sm,
   },
   option: {
     color: colors.textSecondary,
