@@ -3,7 +3,7 @@ import { useCallback, useState } from 'react';
 import { Alert, FlatList, StyleSheet, View } from 'react-native';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import { getLesson, partsToRetry, queueRetry } from '@/data/lessons';
+import { getLesson, markStudied, partsToRetry, queueRetry } from '@/data/lessons';
 import { deleteQuestion, listLessonQuestions, type Question } from '@/data/questions';
 import { Button, Text } from '@/ui/components';
 import { syncNow } from '@/sync/sync';
@@ -52,6 +52,13 @@ export default function LessonQuestionsScreen() {
     setRetryMessage(pickProblem(picked));
   }
 
+  async function studied() {
+    if (!data?.lesson) return;
+    await markStudied(db, data.lesson);
+    await reload();
+    await syncNow(db);
+  }
+
   function confirmDelete(question: Question) {
     confirmDeleteQuestion(async () => {
       await deleteQuestion(db, question.id);
@@ -83,6 +90,7 @@ export default function LessonQuestionsScreen() {
               <View style={styles.card}>
                 <Text style={styles.status}>{t.notStudied}</Text>
                 <Text style={styles.meta}>{t.notStudiedHint}</Text>
+                <Button title={t.markStudied} onPress={studied} />
               </View>
             )}
             {lesson?.generationStatus != null && (

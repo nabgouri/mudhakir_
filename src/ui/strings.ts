@@ -62,7 +62,8 @@ export const t = {
   lessonTitle: (subjectName: string, n: number) => `${subjectName}: الدرس ${n}`,
   notStudied: 'لم يُدرس بعد',
   notStudiedHint:
-    'لن تظهر أسئلة هذا الدرس في المراجعة حتى تدرسه. بعد دراسته، تفاعل مع أي منشور له في قناة المعهد على تيليجرام، فيُعَدّ هو وما قبله من دروس المادة مدروسة خلال ساعة.',
+    'لن تظهر أسئلة هذا الدرس في المراجعة حتى تدرسه. بعد دراسته اضغط «درستُ هذا الدرس»، فيُعَدّ هو وما قبله من دروس المادة مدروسة.',
+  markStudied: 'درستُ هذا الدرس',
   interactiveReviewUrlPlaceholder: 'عنوان المذاكرة التفاعلية (اختياري)',
   interactiveReviewUrlInvalid: 'الصق عنوان صفحة المذاكرة التفاعلية كما هو، ويبدأ بـ https://',
   generationStatus: {

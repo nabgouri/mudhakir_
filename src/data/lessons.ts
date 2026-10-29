@@ -16,7 +16,7 @@ export type Lesson = {
   number: number;
   // The Lesson Title, for a Lesson imported from the Ma'had Channel.
   title: string | null;
-  // When the student studied it; null until they react to it in the channel.
+  // When the student studied it; null for an imported Lesson until they mark it studied.
   studiedAt: number | null;
   interactiveReviewUrl: string | null;
   // The SHA-256 of each part's Transcript text; empty without a Transcript.
@@ -212,6 +212,21 @@ export async function getLesson(db: SQLiteDatabase, id: string): Promise<(Lesson
     id,
   );
   return row === null ? null : lessonFromRow(row);
+}
+
+// The student has studied the Lesson: it, and every earlier unstudied Lesson
+// of its Subject, become Studied Lessons, so their new Questions start being
+// introduced (docs/adr/0002). One tap catches up a backlog.
+export async function markStudied(db: SQLiteDatabase, lesson: { subjectId: string; number: number }): Promise<void> {
+  const now = Date.now();
+  await db.runAsync(
+    `UPDATE lessons SET studied_at = ?, updated_at = MAX(?, updated_at + 1)
+     WHERE subject_id = ? AND number <= ? AND studied_at IS NULL AND deleted_at IS NULL`,
+    now,
+    now,
+    lesson.subjectId,
+    lesson.number,
+  );
 }
 
 // Deleting a Lesson deletes its Questions with it, and any Transcript text

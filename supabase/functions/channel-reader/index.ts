@@ -13,10 +13,10 @@
 //     Lesson Title and Interactive Review, its Transcript read from the PDF
 //     (shared/pdf-text.ts) and split as the phone splits it;
 //  3. sends its parts for generation, and any part of an earlier import the
-//     routine's hourly limit kept back;
-//  4. marks studied each imported Lesson the student reacted to in the
-//     channel, with every earlier one of its Subject: until then its
-//     Questions are not introduced.
+//     routine's hourly limit kept back.
+//
+// An imported Lesson is not studied: its Questions are not introduced until
+// the student marks it studied in the app.
 //
 // One Lesson per call keeps each call within Supabase's CPU limit; while
 // more are waiting, the call starts the next one before it returns.
@@ -201,7 +201,7 @@ class Reader {
       subject_id: await this.subjectId(lesson.subjectName, now),
       number: lesson.lessonNumber,
       title: lesson.title,
-      // Not studied until the student reacts to it in the channel.
+      // Not studied until the student marks it studied in the app.
       studied_at: null,
       interactive_review_url: lesson.interactiveReviewUrl,
       transcript_digests: await Promise.all(parts.map(sha256Hex)),
@@ -280,50 +280,6 @@ class Reader {
       })
       .map((row) => row.id);
   }
-
-  // Marks studied each unstudied imported Lesson whose posts the student
-  // reacted to, with every earlier unstudied Lesson of its Subject. Returns
-  // how many were marked. Reactions are fetched in full: in a channel, a
-  // post's reaction counts don't say which reaction is the account's own.
-  async markReactedLessonsStudied(): Promise<number> {
-    const { data, error } = await this.db
-      .from('lessons')
-      .select('subject_id, number, channel_imports!inner(post_ids)')
-      .eq('owner', this.owner)
-      .is('deleted_at', null)
-      .is('studied_at', null);
-    if (error) throw new Error(`Looking for unstudied Lessons failed: ${error.message}`);
-
-    const lessonOf = new Map<number, { subjectId: string; number: number }>();
-    for (const row of data) {
-      const imports = [row.channel_imports].flat() as { post_ids: number[] }[];
-      for (const id of imports[0]?.post_ids ?? []) lessonOf.set(id, { subjectId: row.subject_id, number: row.number });
-    }
-    const upTo = new Map<string, number>();
-    const ids = [...lessonOf.keys()];
-    for (let i = 0; i < ids.length; i += 100) {
-      const messages = (await this.tg.getMessages(this.channel, ids.slice(i, i + 100))).filter((m) => m !== null);
-      if (messages.length === 0) continue;
-      const reactions = await this.tg.getMessageReactions(messages);
-      messages.forEach((message, j) => {
-        if (!reactions[j]?.reactions.some((reaction) => reaction.order !== null)) return;
-        const lesson = lessonOf.get(message.id)!;
-        upTo.set(lesson.subjectId, Math.max(upTo.get(lesson.subjectId) ?? 0, lesson.number));
-      });
-    }
-
-    let marked = 0;
-    for (const [subjectId, number] of upTo) {
-      const { data: count, error: markError } = await this.db.rpc('mark_lessons_studied', {
-        p_owner: this.owner,
-        p_subject_id: subjectId,
-        p_up_to: number,
-      });
-      if (markError) throw new Error(`Marking Lessons studied failed: ${markError.message}`);
-      marked += count;
-    }
-    return marked;
-  }
 }
 
 type State = { last_post_id: number };
@@ -342,8 +298,6 @@ Deno.serve(async (req) => {
     reader = await Reader.open(db);
     const { data: state, error: stateError } = await db.from('channel_reader_state').select('last_post_id').single<State>();
     if (stateError) throw new Error(`Reading the reader's state failed: ${stateError.message}`);
-
-    const studied = await reader.markReactedLessonsStudied();
 
     const posts = await reader.postsAfter(state.last_post_id, Date.now());
     const { lessons, problems } = lessonsFromPosts(posts);
@@ -384,7 +338,7 @@ Deno.serve(async (req) => {
         fetch(req.url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-reader-secret': secret }, body: '{}' }),
       );
     }
-    return reply(200, { studied, imported, waiting: more, limited, problems });
+    return reply(200, { imported, waiting: more, limited, problems });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error('The Channel Reader failed', message);

@@ -55,6 +55,6 @@ Install an app build with this change first: an older app doesn't know which Les
 select vault.create_secret('https://<project-ref>.supabase.co/functions/v1/channel-reader', 'channel_reader_url');
 ```
 
-From the next hour on, the reader imports the channel's Lessons, oldest first, one per call; the first run catches up on every past Lesson within minutes. They arrive **unstudied** («لم يُدرس بعد»): react to any post of the last Lesson you've studied in each Subject, and within the hour it and every earlier Lesson of that Subject become studied, and their Questions start coming.
+From the next hour on, the reader imports the channel's Lessons, oldest first, one per call; the first run catches up on every past Lesson within minutes. They arrive **unstudied** («لم يُدرس بعد»): open the last Lesson you've studied in each Subject and tap **«درستُ هذا الدرس»**, and it and every earlier Lesson of that Subject become studied, and their Questions start coming.
 
 To see what the last run did, read `channel_reader_state` in the **Table Editor**: `last_run_at`, `last_error`, and `problems`, the posts it could not read as Lessons. To switch the reader off, delete the `channel_reader_url` secret in **Vault**.
