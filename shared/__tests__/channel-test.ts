@@ -1,4 +1,4 @@
-import { lessonsFromPosts, type ChannelPost } from '../channel';
+import { lessonsFromPosts, lessonsToImport, type ChannelLesson, type ChannelPost } from '../channel';
 
 // Reading the Ma'had Channel's posts as Lessons. The posts are shaped as the
 // channel really posts them: each Lesson is an audio post with its title, a
@@ -44,6 +44,7 @@ test('a Lesson’s audio, PDF and link become one Lesson with its Subject, numbe
       pdfPostId: posts[2].id,
       interactiveReviewUrl: 'https://lessons.aqadi-it-students.workers.dev/Muojaz/13',
       postIds: [posts[1].id, posts[2].id, posts[3].id],
+      date: AT,
     },
   ]);
 });
@@ -116,4 +117,34 @@ test('an audio post with no PDF or link gives no Lesson, as a problem', () => {
   const { lessons, problems } = lessonsFromPosts([audio]);
   expect(lessons).toEqual([]);
   expect(problems).toEqual([{ postIds: [audio.id], reason: 'A موجز الاعتقاد Lesson with no PDF or link to tell its number' }]);
+});
+
+describe('lessonsToImport', () => {
+  const TODAY = Date.UTC(2026, 9, 29);
+  const lesson = (subjectName: string, date: number): ChannelLesson => ({
+    subjectName,
+    lessonNumber: 1,
+    title: null,
+    pdfPostId: null,
+    interactiveReviewUrl: null,
+    postIds: [],
+    date,
+  });
+
+  test('past Lessons are imported only for the books the student chose; new Lessons always are', () => {
+    const lessons = [
+      lesson('المدخل إلى علم العقيدة', TODAY - 30 * 24 * 60 * 60 * 1000),
+      lesson('موجز الاعتقاد', TODAY - 30 * 24 * 60 * 60 * 1000),
+      lesson('أعمال القلوب', TODAY - 1),
+      lesson('كتاب جديد', TODAY + 1),
+      lesson('موجز الاعتقاد', TODAY + 1),
+    ];
+    const scope = { since: TODAY, pastSubjects: ['موجز الاعتقاد', 'أعمال القلوب'] };
+    expect(lessonsToImport(lessons, scope).map((l) => [l.subjectName, l.date > TODAY])).toEqual([
+      ['موجز الاعتقاد', false],
+      ['أعمال القلوب', false],
+      ['كتاب جديد', true],
+      ['موجز الاعتقاد', true],
+    ]);
+  });
 });

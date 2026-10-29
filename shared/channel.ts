@@ -27,6 +27,8 @@ export type ChannelLesson = {
   pdfPostId: number | null;
   interactiveReviewUrl: string | null;
   postIds: number[];
+  // When its first post was posted, in milliseconds since the epoch.
+  date: number;
 };
 
 // Posts the reader could not read as Lessons, so a change in the channel's
@@ -95,6 +97,7 @@ function lessonFrom(tag: string, parts: Part[]): ChannelLesson | ChannelProblem 
     pdfPostId: pdf?.post.id ?? null,
     interactiveReviewUrl: link?.url ?? null,
     postIds,
+    date: parts[0].post.date,
   };
 }
 
@@ -132,4 +135,13 @@ export function lessonsFromPosts(posts: readonly ChannelPost[]): { lessons: Chan
     else lessons.push(result);
   }
   return { lessons, problems };
+}
+
+// Which past books to import: Lessons posted before `since` are imported
+// only for `pastSubjects`; every Lesson posted since is imported, so a book
+// the channel starts later comes in on its own.
+export type ImportScope = { since: number; pastSubjects: readonly string[] };
+
+export function lessonsToImport(lessons: readonly ChannelLesson[], scope: ImportScope): ChannelLesson[] {
+  return lessons.filter((lesson) => lesson.date >= scope.since || scope.pastSubjects.includes(lesson.subjectName));
 }

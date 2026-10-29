@@ -18,8 +18,11 @@
 // An imported Lesson is not studied: its Questions are not introduced until
 // the student marks it studied in the app.
 //
-// One Lesson per call keeps each call within Supabase's CPU limit; while
-// more are waiting, the call starts the next one before it returns.
+// One Lesson per call keeps each call within Supabase's limits; while more
+// are waiting, the call queues the next one through pg_net before it returns.
+//
+// Past Lessons are imported only for the books in `channel_reader_state`'s
+// `past_subjects`; every Lesson posted since `import_since` is.
 //
 // A post less than 10 minutes old is left for the next call, since a
 // Lesson's posts arrive over a few minutes. A Lesson whose Subject and
@@ -43,13 +46,11 @@ import { MemoryStorage, TelegramClient, WebPlatform, type Chat, type Message } f
 import 'pdfjs-dist/legacy/build/pdf.worker.min.mjs';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.min.mjs';
 
-import { lessonsFromPosts, type ChannelLesson, type ChannelPost } from '../../../shared/channel.ts';
+import { lessonsFromPosts, lessonsToImport, type ChannelLesson, type ChannelPost } from '../../../shared/channel.ts';
 import { GenerateRequest } from '../../../shared/generation.ts';
 import { documentText, pageText } from '../../../shared/pdf-text.ts';
 import { lessonTranscriptParts } from '../../../shared/transcript.ts';
 import { sendPart } from '../_shared/send-part.ts';
-
-declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void };
 
 // Posts of one Lesson arrive over a few minutes; younger posts wait.
 const SETTLE_MS = 10 * 60 * 1000;
@@ -282,7 +283,7 @@ class Reader {
   }
 }
 
-type State = { last_post_id: number };
+type State = { last_post_id: number; import_since: string; past_subjects: string[] };
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return reply(405, { error: 'POST only' });
@@ -293,14 +294,29 @@ Deno.serve(async (req) => {
   const { data: allowed } = await db.rpc('channel_reader_secret_ok', { p_secret: secret });
   if (allowed !== true) return reply(401, { error: 'Wrong secret' });
 
+  // How long each step took, in the logs, since a call must end within
+  // Supabase's 150 seconds.
+  const started = Date.now();
+  const step = (name: string) => console.log(`channel-reader: ${name} after ${Date.now() - started} ms`);
+
   let reader: Reader | null = null;
   try {
-    reader = await Reader.open(db);
-    const { data: state, error: stateError } = await db.from('channel_reader_state').select('last_post_id').single<State>();
+    const { data: state, error: stateError } = await db
+      .from('channel_reader_state')
+      .select('last_post_id, import_since, past_subjects')
+      .single<State>();
     if (stateError) throw new Error(`Reading the reader's state failed: ${stateError.message}`);
+    reader = await Reader.open(db);
+    step('connected to Telegram');
 
     const posts = await reader.postsAfter(state.last_post_id, Date.now());
-    const { lessons, problems } = lessonsFromPosts(posts);
+    step(`read ${posts.length} posts`);
+    const parsed = lessonsFromPosts(posts);
+    const problems = parsed.problems;
+    const lessons = lessonsToImport(parsed.lessons, {
+      since: new Date(state.import_since).getTime(),
+      pastSubjects: state.past_subjects,
+    });
 
     // The routine's hourly limit may have kept parts back: those first.
     let limited = false;
@@ -318,7 +334,9 @@ Deno.serve(async (req) => {
     if (!limited && waiting.length > 0) {
       const [next] = waiting;
       const lessonId = await reader.importLesson(next);
+      step(`imported ${next.subjectName} ${next.lessonNumber}`);
       limited = !(await reader.sendUnsentParts(lessonId));
+      step('sent it for generation');
       imported = { subject: next.subjectName, number: next.lessonNumber };
     }
     const more = waiting.length - (imported ? 1 : 0);
@@ -331,12 +349,13 @@ Deno.serve(async (req) => {
       .update({ last_post_id: lastPostId, last_run_at: new Date().toISOString(), last_error: null, problems })
       .eq('id', 1);
 
-    // The next Lesson in a call of its own, unless the routine's limit is
-    // reached: the hourly call carries on from there.
+    // The next Lesson in a call of its own, queued through pg_net like the
+    // hourly job (a request this function started itself would be dropped
+    // when it shuts down), unless the routine's limit is reached: the hourly
+    // call carries on from there.
     if (more > 0 && !limited) {
-      EdgeRuntime.waitUntil(
-        fetch(req.url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-reader-secret': secret }, body: '{}' }),
-      );
+      const { error: nextError } = await db.rpc('run_channel_reader');
+      if (nextError) console.error('Queueing the next call failed', nextError.message);
     }
     return reply(200, { imported, waiting: more, limited, problems });
   } catch (error) {
