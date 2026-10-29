@@ -14,3 +14,8 @@ secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"
 # Called by a database trigger with a shared secret, not by a signed-in user.
 [functions.notify-ready]
 verify_jwt = false
+
+# Called every hour by pg_cron with a shared secret that only the database
+# holds; the function checks it before doing anything.
+[functions.channel-reader]
+verify_jwt = false
