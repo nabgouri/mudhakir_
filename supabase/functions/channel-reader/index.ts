@@ -12,8 +12,9 @@
 //     not yet in Supabase: its Subject (if new) and the Lesson, with its
 //     Lesson Title and Interactive Review, its Transcript read from the PDF
 //     (shared/pdf-text.ts) and split as the phone splits it;
-//  3. sends its parts for generation, and any part of an earlier import the
-//     routine's hourly limit kept back.
+//  3. sends its parts for generation. A Lesson with parts still to send
+//     (kept back by the routine's hourly limit, or set back to be generated
+//     again) is sent first, one per call, before anything new is imported.
 //
 // An imported Lesson is not studied: its Questions are not introduced until
 // the student marks it studied in the app.
@@ -352,20 +353,21 @@ Deno.serve(async (req) => {
       pastSubjects: state.past_subjects,
     });
 
-    // The routine's hourly limit may have kept parts back: those first.
+    // Parts still to send come first: kept back by the routine's hourly
+    // limit, or a Lesson set back to be generated again. One Lesson per
+    // call, like imports.
     let limited = false;
-    for (const lessonId of await reader.lessonsWithUnsentParts()) {
-      if (!(await reader.sendUnsentParts(lessonId))) {
-        limited = true;
-        break;
-      }
+    const unsent = await reader.lessonsWithUnsentParts();
+    if (unsent.length > 0) {
+      limited = !(await reader.sendUnsentParts(unsent[0]));
+      step('sent a Lesson waiting to be sent');
     }
 
     const waiting: ChannelLesson[] = [];
     for (const lesson of lessons) if (!(await reader.isImported(lesson))) waiting.push(lesson);
 
     let imported: { subject: string; number: number } | null = null;
-    if (!limited && waiting.length > 0) {
+    if (!limited && unsent.length === 0 && waiting.length > 0) {
       const [next] = waiting;
       const lessonId = await reader.importLesson(next);
       step(`imported ${next.subjectName} ${next.lessonNumber}`);
@@ -387,11 +389,12 @@ Deno.serve(async (req) => {
     // hourly job (a request this function started itself would be dropped
     // when it shuts down), unless the routine's limit is reached: the hourly
     // call carries on from there.
-    if (more > 0 && !limited) {
+    const toSend = Math.max(0, unsent.length - 1);
+    if ((more > 0 || toSend > 0) && !limited) {
       const { error: nextError } = await db.rpc('run_channel_reader');
       if (nextError) console.error('Queueing the next call failed', nextError.message);
     }
-    return reply(200, { imported, waiting: more, limited, problems });
+    return reply(200, { imported, waiting: more, toSend, limited, problems });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error('The Channel Reader failed', message);
