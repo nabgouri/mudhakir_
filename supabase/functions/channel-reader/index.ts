@@ -55,6 +55,17 @@ import { sendPart } from '../_shared/send-part.ts';
 // Posts of one Lesson arrive over a few minutes; younger posts wait.
 const SETTLE_MS = 10 * 60 * 1000;
 
+// Connecting usually takes under a second, but now and then it stalls for
+// minutes, and a call must end within Supabase's 150 seconds. A stalled call
+// gives up and starts a fresh one, which connects anew.
+const CONNECT_TIMEOUT_MS = 30_000;
+
+class ConnectTimeout extends Error {
+  constructor() {
+    super(`Telegram did not answer within ${CONNECT_TIMEOUT_MS / 1000} s`);
+  }
+}
+
 // The web platform reads `navigator.onLine`, which Deno doesn't have, and
 // would then start out believing it is offline.
 class EdgePlatform extends WebPlatform {
@@ -111,6 +122,8 @@ class Reader {
     private owner: string,
   ) {}
 
+  // Gives up with `ConnectTimeout` when Telegram hasn't answered within
+  // `CONNECT_TIMEOUT_MS`.
   static async open(db: SupabaseClient): Promise<Reader> {
     const tg = new TelegramClient({
       apiId: Number(env('TELEGRAM_API_ID')),
@@ -119,17 +132,30 @@ class Reader {
       platform: new EdgePlatform(),
       disableUpdates: true,
     });
+    let timer: number | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new ConnectTimeout()), CONNECT_TIMEOUT_MS);
+    });
+    try {
+      const channel = await Promise.race([Reader.findChannel(tg), timeout]);
+      return new Reader(tg, channel, db, env('STUDENT_USER_ID'));
+    } catch (error) {
+      await tg.destroy().catch(() => {});
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  // A new in-memory session doesn't know the channel's access hash, so it is
+  // found among the account's chats. Only this one chat is ever read.
+  private static async findChannel(tg: TelegramClient): Promise<Chat> {
     await tg.importSession(env('TELEGRAM_SESSION'));
     await tg.connect();
-    // A new in-memory session doesn't know the channel's access hash, so it
-    // is found among the account's chats. Only this one chat is ever read.
     const channelId = Number(env('TELEGRAM_CHANNEL_ID'));
     for await (const dialog of tg.iterDialogs()) {
-      if (dialog.peer.id === channelId && dialog.peer.type === 'chat') {
-        return new Reader(tg, dialog.peer, db, env('STUDENT_USER_ID'));
-      }
+      if (dialog.peer.id === channelId && dialog.peer.type === 'chat') return dialog.peer;
     }
-    await tg.destroy();
     throw new Error(`The Telegram account has no chat with id ${channelId}`);
   }
 
@@ -283,7 +309,13 @@ class Reader {
   }
 }
 
-type State = { last_post_id: number; import_since: string; past_subjects: string[] };
+type State = {
+  last_post_id: number;
+  import_since: string;
+  past_subjects: string[];
+  last_run_at: string | null;
+  last_error: string | null;
+};
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return reply(405, { error: 'POST only' });
@@ -300,12 +332,14 @@ Deno.serve(async (req) => {
   const step = (name: string) => console.log(`channel-reader: ${name} after ${Date.now() - started} ms`);
 
   let reader: Reader | null = null;
+  let state: State | null = null;
   try {
-    const { data: state, error: stateError } = await db
+    const { data, error: stateError } = await db
       .from('channel_reader_state')
-      .select('last_post_id, import_since, past_subjects')
+      .select('last_post_id, import_since, past_subjects, last_run_at, last_error')
       .single<State>();
     if (stateError) throw new Error(`Reading the reader's state failed: ${stateError.message}`);
+    state = data;
     reader = await Reader.open(db);
     step('connected to Telegram');
 
@@ -362,6 +396,13 @@ Deno.serve(async (req) => {
     const message = error instanceof Error ? error.message : String(error);
     console.error('The Channel Reader failed', message);
     await db.from('channel_reader_state').update({ last_run_at: new Date().toISOString(), last_error: message }).eq('id', 1);
+    // A stalled connect is tried once more in a fresh call; if that one
+    // stalled too, Telegram may be down, and the hourly call tries again.
+    const retried = state?.last_error === message && Date.now() - Date.parse(state.last_run_at ?? '') < 10 * 60 * 1000;
+    if (error instanceof ConnectTimeout && !retried) {
+      const { error: nextError } = await db.rpc('run_channel_reader');
+      if (nextError) console.error('Queueing a fresh call failed', nextError.message);
+    }
     return reply(500, { error: message });
   } finally {
     await reader?.close();
